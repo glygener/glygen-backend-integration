@@ -1,0 +1,67 @@
+{
+	"title":"The HIVE Lab"
+	,"sections":[
+		{"id":"home", "label":"HOME", "action":"GetMainPageStep1", "access":"111"}
+		,{"id":"research", "label":"RESEARCH PROJECTS", "action":"GetPageContentStep1", "access":"111"}
+		,{"id":"resources", "label":"TOOS & RESOURCES", "action":"GetPageContentStep1", "access":"111"}
+		,{"id":"publications", "label":"PUBLICATIONS", "action":"GetPageContentStep1", "access":"111"}
+		,{"id":"people", "label":"LAB MEMBERS", "action":"GetPageContentStep1", "access":"111"}
+		,{"id":"events", "label":"EVENTS", "action":"xx", "access":"111"}
+		,{"id":"gwfaculty", "label":"GW Faculy", "action":"GetPageContentStep1", "access":"000"}
+		,{"id":"login", "label":"Login", "action":"GetLoginPage", "access":"000"}
+		,{"id":"logout", "label":"Logout", "action":"Logout", "access":"000"}
+		,{"id":"register", "label":"Register", "action":"xx", "access":"000"}
+		,{"id":"hiveteam", "label":"HIVE Team", "action":"xx", "access":"000"}
+		,{"id":"privacy", "label":"Privacy Policy", "action":"xx", "access":"000"}
+		,{"id":"sitehelp", "label":"Help", "action":"", "access":"000"}
+	]
+	,"topsections":[
+		{"id":"login", "label":"Login/Register", "action":"GetLoginPage", "access":"111"}
+                ,{"id":"sitehelp", "label":"Help", "action":"", "access":"111"}
+		,{"id":"contactus", "label":"Contact Us", "action":"xx", "access":"111"}
+                ,{"id":"logout", "label":"Logout", "action":"Logout", "access":"000"}
+        ]
+	,"tst":{
+		"dbinfo":{
+			"dbhost":"localhost"
+			,"dbname":"mzlabdb1"
+			,"dbuserid":"mzlabdb1admin"
+			,"dbpassword":"pass2mzlab"
+		}
+		,"rootinfo":{
+			"sectionbaseurl":""
+			,"ghomeurl":""
+			,"ghtmlroot":""
+		}
+		,"pathinfo":{
+                        "ghtmlpath":"/hive/tst/html/datasetviewer/"
+                        ,"libpath":"/hive/tst/cgi-bin/datasetviewer/lib/"
+		}
+		
+	}
+	,"dev":{
+                "dbinfo":{
+                        "dbhost":"localhost"
+                        ,"dbname":"mzlabdb1"
+                        ,"dbuserid":"mzlabdb1admin"
+                        ,"dbpassword":"pass2mzlab"
+                }
+		,"rootinfo":{
+			"sectionbaseurl":""
+			,"ghomeurl":""
+			,"ghtmlroot":""
+		}	
+                ,"pathinfo":{
+			"ghtmlpath":"/hive/tst/html/datasetviewer/"
+			,"libpath":"/hive/tst/cgi-bin/datasetviewer/lib/"
+		}
+	}
+}
+
+
+
+
+
+
+
+

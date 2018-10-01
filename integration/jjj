@@ -1,0 +1,6 @@
+
+
+python make-proteoform_glycosylation_sites_unicarbkb_glytoucan-csv-step2a.py -i ../conf/config-1.0.json -s human
+
+
+

@@ -1,0 +1,85 @@
+{
+	
+        "pathinfo":{
+            "downloads": "/data/projects/glygen/downloads/"
+            ,"reviewed":"/data/projects/glygen/generated/datasets/reviewed/"
+            ,"unreviewed":"/data/projects/glygen/generated/datasets/unreviewed/"
+            ,"updated":"/data/projects/glygen/generated/datasets/updated/"
+            ,"logs":"/data/projects/glygen/generated/datasets/logs/"
+            ,"intermediate":"/data/projects/glygen/generated/datasets/intermediate/"
+            ,"uniprot":"/data/projects/glygen/downloads/uniprot/"
+            ,"fasta":"/data/projects/glygen/downloads/glycosylation_site_qc/"
+            ,"glytoucan_input":"/data/projects/glygen/generated/glytoucan/text/gtc_v3/"
+            ,"glytoucan_output":"/data/projects/glygen/generated/glytoucan/csv/gtc_v3/"
+        }
+        ,"graphlist":[
+		"http://foodata.com#",
+		"http://glygendata.com#"
+	],
+	"orgname":{
+		"human":"Homo sapiens",
+		"mouse":"Mus musculus"
+	},
+	"taxid":{
+		"human":9606,
+		"mouse":10090
+	}
+	,"namespaces":{
+		"rdf":"http://www.w3.org/1999/02/22-rdf-syntax-ns"
+		,"glycan":"http://purl.jp/bio/12/glyco/glycan"
+		,"up_core":"http://purl.uniprot.org/core"
+		,"uniprot":"http://purl.uniprot.org/uniprot"
+	}
+	,"edges":{
+		"edges_x":[ 
+			"catalyzed_by"
+			,"degraded_by"
+			,"has_affinity_to"
+			,"has_component"
+			,"has_epitope"
+			,"has_glycoconjugate_sequence"
+			,"has_glycosequence"
+			,"has_image"
+			,"has_motif"
+			,"is_ambiguous"
+			,"synthesized_by"
+		]
+		,"edges_1":[
+			"has_glycosequence"
+		]
+	}
+	,"orgname":{
+		"human":"Homo sapiens",
+		"mouse":"Mus musculus"
+	},
+	"files":{
+		"human":{
+			"groupingfile":"/data/projects/glygen/downloads/protein/UP000005640_9606_acc2groupid_2017_11.tsv",
+			"idmapfile":"/data/projects/glygen/generated/output/human_uniprot_idmapping.csv",
+			"fasta_canonical":"/data/projects/glygen/generated/output/human_uniprot_canonical.fasta",
+			"fasta_all":"/data/projects/glygen/generated/output/human_uniprot_all.fasta",	
+			"log_canonical":"/data/projects/glygen/generated/output/human_uniprot_canonical.log",
+			"log_all":"/data/projects/glygen/generated/output/human_uniprot_all.log",
+			"fasta_pep":"/data/external/ucsc/targets/Homo_sapiens.GRCh37.75.pep.all.fa",
+			"fasta_uniprot":"/data/external/uniprot/targets/human_uniprot_all.fasta"	
+                }
+		,"mouse":{
+			"groupingfile":"/data/projects/glygen/downloads/protein/UP000000589_10090_acc2groupid_2017_11.tsv",
+			"idmapfile":"/data/projects/glygen/generated/output/mouse_uniprot_idmapping.csv",
+			"fasta_canonical":"/data/projects/glygen/generated/output/mouse_uniprot_canonical.fasta",
+                        "fasta_all":"/data/projects/glygen/generated/output/mouse_uniprot_all.fasta",
+                        "log_canonical":"/data/projects/glygen/generated/output/mouse_uniprot_canonical.log",
+                        "log_all":"data/projects/glygen/generated/output/mouse_uniprot_all.log"
+		}
+		,"glycandb":"/data/projects/glygen/jsondb/glycandb.json"
+		,"datamodel":"/data/projects/glygen/generated/protein/extraction/datamodel.csv"
+
+	},
+	"queries_1":{
+		        	"reviewed":"SELECT ?s, ?o WHERE { ?s <http://purl.uniprot.org/core/reviewed> 'true' ^^<http://www.w3.org/2001/XMLSchema#boolean> . ?s <http://purl.uniprot.org/core/organism> <http://purl.uniprot.org/taxonomy/TAXID> .} "
+					                ,"unreviewed":"SELECT ?s, ?o WHERE { ?s <http://purl.uniprot.org/core/reviewed> 'false'^^<http://www.w3.org/2001/XMLSchema#boolean> . ?s <http://purl.uniprot.org/core/organism> <http://purl.uniprot.org/taxonomy/TAXID> .} "
+							                ,"ac2gene":"SELECT ?s, ?o WHERE { ?s <http://www.w3.org/2004/02/skos/core#prefLabel> ?o . } "
+									                ,"isoformlist":"SELECT ?s, ?o WHERE { ?s <http://purl.uniprot.org/core/sequence> ?o . ?s <http://purl.uniprot.org/core/organism> <http://purl.uniprot.org/taxonomy/TAXID> .}"
+											                ,"ac2canonical":"SELECT ?s, ?o WHERE { ?s <http://purl.uniprot.org/core/basedOn> ?o . ?x <http://purl.uniprot.org/core/sequence> ?s . ?x <http://purl.uniprot.org/core/organism> <http://purl.uniprot.org/taxonomy/TAXID> .}"
+	}
+}

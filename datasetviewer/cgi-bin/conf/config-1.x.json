@@ -1,0 +1,148 @@
+{
+	"server":"dev"
+	,"module":"datasetviewer"
+	,"title":"Dataset Collection v1.0"
+	,"desc":""
+	,"sections":[
+		{"id":"about", "label":"About", "access":"000"}
+		,{"id":"browse", "label":"Browse Objects", "access":"000"}
+		,{"id":"create", "label":"Create New Object", "access":"000"}
+		,{"id":"edit", "label":"Edit Object", "access":"000"}
+		,{"id":"schema", "label":"Data Schema", "access":"000"}
+		,{"id":"deposit", "label":"Submissions", "access":"000"}
+		,{"id":"releasenotes", "label":"Release Notes", "access":"000"}
+		,{"id":"faq", "label":"FAQs", "access":"000"}
+	]
+	,"modulemenubg":"#eee"
+	,"modulemenufg":"#333"
+	,"firstpageid":"browsedata"
+	,"firstgpageid":"resources"
+	,"firstaction":"BrowseTypeTreeStep1"
+	,"queryform":{
+        	"nosearch":true
+		,"boxlist":[[
+                {
+                        "name":"searchvalue1", "class":"valuetxtboxcls", "placeholder":"", "value":""
+                        ,"type":"text", "readonly":false
+                        ,"style":"width:100%;height:30px;padding:3;border:1px solid #fff;"
+                        ,"containerwidth":"90%"
+                        ,"boxlabel":"For example: canonical sequences"
+                }
+                ,{
+                        "name":"searchbtn", "class":"searchbtncls", "value":" Search "
+                        ,"type":"submit", "readonly":false
+                        ,"style":"width:80px;height:30px;"
+                        ,"containerwidth":"10%"
+                }
+        	]]
+        	,"advanced":false
+	}
+	,"tableheaders":{
+	}
+	,"queries":{
+	}
+	,"prd":{
+                "dbinfo":{
+                        "dbhost":"127.0.0.1"
+                        ,"dbname":"$dbname"
+                        ,"dbuserid":"$userid"
+                        ,"dbpassword":"$dbpassword"
+                }
+                ,"rootinfo":{
+                        "baseurl":""
+                        ,"ghtmlroot":""
+                        ,"htmlroot":"http://data.glygen.org"
+                        ,"cgiroot":"/cgi-bin"
+                        ,"pagebase":""
+                        ,"downloadbase":""
+                }
+                ,"pathinfo":{
+                        "htmlpath":"/var/www/html/datasetviewer/"
+                        ,"cgipath":"/var/www/cgi-bin/datasetviewer/"
+                        ,"apierrorlogpath":"<project_data_dir>/apierrorlog/"
+                        ,"apicachepath":"<project_data_dir>/apicache/"
+                        ,"jsondbpath":"<project_data_dir>/jsondb/"
+                        ,"debuglogfile":"<project_data_dir>/apierrorlog/debug.txt"
+                }
+        }
+	,"beta":{
+                "dbinfo":{
+                        "dbhost":"127.0.0.1"
+                        ,"dbname":"$dbname"
+                        ,"dbuserid":"$userid"
+                        ,"dbpassword":"$dbpassword"
+                }
+                ,"rootinfo":{
+			"baseurl":""
+                	,"ghtmlroot":""
+                	,"htmlroot":"http://beta.data.glygen.org"
+                	,"cgiroot":"/cgi-bin"
+                	,"pagebase":""
+                	,"downloadbase":""
+		}
+		,"pathinfo":{
+                        "htmlpath":"/var/www/html/beta/datasetviewer/"
+                        ,"cgipath":"/var/www/cgi-bin/beta/datasetviewer/"
+                	,"apierrorlogpath":"<project_data_dir>/apierrorlog/"
+			,"apicachepath":"<project_data_dir>/apicache/"
+			,"jsondbpath":"<project_data_dir>/jsondb/"
+			,"debuglogfile":"<project_data_dir>/apierrorlog/debug.txt"
+		}
+	}
+	,"tst":{
+                "dbinfo":{
+                        "dbhost":"127.0.0.1"
+                        ,"dbname":"$dbname"
+                        ,"dbuserid":"$userid"
+                        ,"dbpassword":"$dbpassword"
+                }
+                ,"rootinfo":{
+                        "baseurl":""
+                        ,"ghtmlroot":""
+                        ,"htmlroot":"http://tst.data.glygen.org"
+                        ,"cgiroot":"/cgi-bin"
+                        ,"pagebase":""
+                        ,"downloadbase":""
+                }
+                ,"pathinfo":{
+                        "htmlpath":"/var/www/html/datasetviewer/"
+                        ,"cgipath":"/var/www/cgi-bin/datasetviewer/"
+                        ,"apierrorlogpath":"<project_data_dir>/apierrorlog/"
+                        ,"apicachepath":"<project_data_dir>/apicache/"
+                        ,"jsondbpath":"<project_data_dir>/jsondb/"
+                        ,"debuglogfile":"<project_data_dir>/apierrorlog/debug.txt"
+                }
+        }
+	,"dev":{
+                "dbinfo":{
+                        "dbhost":"127.0.0.1"
+                        ,"dbname":"glygen"
+                        ,"dbuserid":"dataservieweradmin"
+                        ,"dbpassword":"dataserviewerpass"
+                }
+                ,"rootinfo":{
+                        "baseurl":""
+                        ,"ghtmlroot":""
+                        ,"htmlroot":"http://dev.data.glygen.org"
+                        ,"cgiroot":"/cgi-bin"
+                        ,"pagebase":""
+                        ,"downloadbase":""
+                }
+                ,"pathinfo":{
+                        "htmlpath":"/var/www/html/datasetviewer/"
+                        ,"cgipath":"/var/www/cgi-bin/datasetviewer/"
+                        ,"apierrorlogpath":"<project_data_dir>/apierrorlog/"
+                        ,"apicachepath":"<project_data_dir>/apicache/"
+                        ,"jsondbpath":"<project_data_dir>/jsondb/"
+                        ,"debuglogfile":"<project_data_dir>/apierrorlog/debug.txt"
+                }
+        }
+}
+
+
+
+
+
+
+
+
