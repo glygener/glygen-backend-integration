@@ -10,6 +10,7 @@ var batchCount = 0;
 var datasetName = '';
 var readMeFile = '';
 var objId = '';
+var objVer = '';
 var resJson = {};
 var filterHash = {};
 var seen = {"category":{}, "species":{}, "filetype":{}, "datasetcount":{}, "status":{}};       
@@ -21,36 +22,14 @@ var seen = {"category":{}, "species":{}, "filetype":{}, "datasetcount":{}, "stat
 $(document ).ready(function() {
 
 	setGlobalMenuCn();        
-	var sections = getSections();
-        //$("#modulesectionscn").html(sections);
-	$("#modulesearchboxcn").html(getSearchBoxCn());
-
 	setPageFrame();
-        setModuleVersion();
+        $("#moduleversioncn").html('Version-' + moduleRelease);
         fillFrameCn();
         modifyMenuLinks();
 
 });
 
-/////////////////////
-function setModuleVersion(){
 
-        var url = cgiRoot + '/servlet.cgi';
-        var reqObj = new XMLHttpRequest();
-        reqObj.open("POST", url, true);
-        reqObj.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-        reqObj.onreadystatechange = function() {
-                if (reqObj.readyState == 4 && reqObj.status == 200) {
-                        var miscObj = JSON.parse(reqObj.responseText);
-                        $("#moduleversioncn").html(miscObj["version"]);
-                }
-        };
-        var postData = 'mode=json&svc=get_module_version';
-        reqObj.send(postData);
-        console.log(postData);
-    
-        return;
-}
 
 
 /////////////////////////
@@ -83,7 +62,7 @@ function setPageFrame(){
 	]
 	var linkSet = linkList.join(" | ");
 	
-	$("#pagelinkscn").html(linkSet);
+        $("#pagelinkscn").html(linkSet);
 
 	return;
 }
@@ -92,16 +71,22 @@ function setPageFrame(){
 ////////////////////////////
 function fillFrameCn(){
 
+
+        var imgFile = htmlRoot + "/content/loading.gif";
+        var gifImage = '<img src='+imgFile+' style="width:20%;margin-left:40%;margin-top:2%;">';        
+        $("#pagecn").html(gifImage);
+
+
 	if(pageId == 'browse'){
 		fillGridViewCn("1");
         }
         else if(pageId == 'view'){
             fillEntryViewCn();
         }
-        else if(server == "dev" && pageId == 'edit'){
+	else if(server == "tst" && pageId == 'edit'){
 		fillJsonTextCn();
 	}
-	else if(server == "dev" && pageId == 'create'){
+	else if(server == "tst" && pageId == 'create'){
 		objId = 0;
 		fillJsonTextCn();
 	}
@@ -129,8 +114,13 @@ function fillGridViewCn(){
 			rndrGridContent();
                 }
         };
-	var postData = 'mode=json&svc=get_objects';
-	reqObj.send(postData);
+
+        var inJson = {}
+        var queryValue = $("#queryvalue").val().trim();
+        inJson = {"queryvalue":queryValue};
+        
+        var postData = 'mode=json&svc=search_objects&injson=' + JSON.stringify(inJson);
+        reqObj.send(postData);
 	console.log(postData);
 
 }
@@ -144,13 +134,21 @@ function fillEntryViewCn(){
         reqObj.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
         reqObj.onreadystatechange = function() {
                 if (reqObj.readyState == 4 && reqObj.status == 200) {
-                        //console.log('response='+reqObj.responseText);
+                        console.log('response='+reqObj.responseText);
                         resJson = JSON.parse(reqObj.responseText);
-                        rndrEntryContent();
+                        if(resJson["status"] != 1){
+                            $("#pagecn").html("<br><br>" + resJson["errormsg"]);
+                        }
+                        else{
+                            rndrEntryContent();
+                        }
                 }
         };
         objId = objId.replace("/", "");
-        var postData = 'mode=json&svc=get_dataset&objid='+objId;
+
+
+        var postData = 'mode=json&svc=get_dataset&objid='+objId + '&objver=';
+        postData += (objVer != "" ? objVer : '""');
         reqObj.send(postData);
         console.log(postData);
 }
@@ -159,29 +157,52 @@ function fillEntryViewCn(){
 /////////////////////
 function rndrEntryContent(){
 
+
+        var latestObjVer = resJson["versions"][0].split(" ")[0];
+
+        var versionSelector = '<select class=versionselector id=versioncn>';
+        for (var i in resJson["versions"]){
+            var parts = resJson["versions"][i].split(" ");
+            var s = (parts[0] == resJson["selectedversion"] ? "selected" : "");
+            versionSelector += '<option value="'+parts[0]+'" '+s+'>'+resJson["versions"][i]+'</option>';
+        }
+        versionSelector += '</select>';
+
+        var dsId = resJson["info"]["objid"].replace("DSBCO_", "GLYDS");
+        var bcoId = resJson["info"]["objid"];
         var datasetName = resJson["info"]["filename"];
-        var downloadUrl = htmlRoot + '/datasets/reviewed/'+datasetName
-        var readmeUrl = '/' + resJson["info"]["objid"] + '/readme';
-        var links = '<a href="'+readmeUrl+'" style="font-size:12px;" target=_>README</a>';
+        var downloadUrl = htmlRoot + '/ln2wwwdata/reviewed/'+datasetName
+        var readmeUrl = '/' + dsId + '/'  + latestObjVer  + '/readme';
+        
+        var bcoUrl = '/' + bcoId + '/'  + latestObjVer;
+        if (objVer != ''){
+                downloadUrl = htmlRoot + '/ln2wwwdata/reviewed/' + objVer+ '/' +datasetName
+                readmeUrl = '/' + dcId + '/'  + objVer  + '/readme';
+                bcoUrl = '/' + bcoId + '/'  + objVer;
+        }
+       
+        var links = '<a href="'+bcoUrl+'" style="font-size:12px;" target=_>BCO JSON</a>';
+        links += ' | <a href="'+readmeUrl+'" style="font-size:12px;" target=_>README</a>';
         links += ' | <a href="'+downloadUrl+'" download="'+datasetName+'" style="font-size:12px;">DOWNLOAD</a>';
-	var linkId = "obj_" + parseInt(resJson["info"]["objid"].replace("GLYDS", ""));
+	
+        var linkId = "obj_" + parseInt(resJson["info"]["objid"].replace("ONCOMX", ""));
 	links += ' | <a id="'+linkId+'" class=commentlink style="font-size:12px;">COMMENT</a>';
-         
+        
 
 
-        var s1 = 'font-size:18px;font-weight:bold;color:#004065;';
+        var s1 = 'font-size:16px;font-weight:bold;color:#004065;';
        
         var d1 = 'position:static;width:100%;';
         var divcn = '<div style="'+d1+'" id=datasetcn></div>';
         //var cn = JSON.stringify(resJson);
         var cn = '<table width=100% style="font-size:13px;" border=0>';
-        cn += '<tr height=30><td>&nbsp;</td></tr>';
-        cn += '<tr><td>'+resJson["info"]["objid"]+'</td></tr>';
-        cn += '<tr><td style="'+s1+'">'+resJson["info"]["title"]+'</td></tr>';
-        cn += '<tr><td>'+resJson["info"]["description"]+'</td></tr>';
-        cn += '<tr height=10><td align=right style="font-size:11px;">Sample view, download to view all records.</td></tr>';
-        cn += '<tr height=30><td align=right style="border-bottom:1px solid #ccc;">'+links+'</td></tr>';
-        cn += '</table>';
+        cn += '<tr height=30><td colspan=2>&nbsp;</td></tr>';
+        cn += '<tr><td colspan=2>'+resJson["info"]["objid"]+'</td></tr>';
+        cn += '<tr><td style="'+s1+'" colspan=2>'+resJson["info"]["title"]+'</td></tr>';
+        cn += '<tr><td colspan=2>'+resJson["info"]["description"]+'</td></tr>';
+        cn += '<tr height=10><td align=right style="font-size:11px;" colspan=2>Sample view, download to view all records.</td></tr>';
+        cn += '<tr height=40><td style="border-bottom:1px solid #ccc;">Version<br>'+versionSelector+'</td><td align=right style="border-bottom:1px solid #ccc;">'+links+'</td></tr>';
+        cn += '</table><br>';
         cn += divcn;
         $("#pagecn").html(cn);
        
@@ -309,11 +330,11 @@ function rndrDataModelTable(){
 	reqObj.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
 	reqObj.onreadystatechange = function() {
 		if (reqObj.readyState == 4 && reqObj.status == 200) {
-			var resObj = JSON.parse(reqObj.responseText);
+                        var resObj = JSON.parse(reqObj.responseText);
 			drawTable(resObj["dataframe"], "predicatescn", {"pagesize":100});
 		}
 	};
-	var postData = 'mode=json&svc=getDataModelTable';
+	var postData = 'mode=json&svc=get_data_model_table';
 	reqObj.send(postData);
 }
 
@@ -332,9 +353,9 @@ function rndrGridContent(){
 				continue;
 			}
 			var ii = parseInt(i) + 1;
-			var cat = obj["categorytitle"];
+			var cat = obj["category"];
 			seen["category"][cat] = true;
-			seen["datasetcount"][cat] = (cat in seen["datasetcount"] ? seen["datasetcount"][cat] + 1 : 0);
+			seen["datasetcount"][cat] = (!(cat in seen["datasetcount"]) ? 1 : seen["datasetcount"][cat] + 1);
 			seen["total"] += 1;
 			var fileType = obj["filetype"];
 			var species = obj["species"];
@@ -372,7 +393,8 @@ function rndrGridContent(){
 			var s = 'position:absolute;;width:45%;height:15px;border:0px solid red;';
                         s += 'left:5%;top:0%;color:#333;';
                         s += 'padding:15px 0px 0px 0px;font-size:11px;text-align:left;';
-                        objId = "GLYDS00000".substring(0, 10 - String(obj["_id"]).length) + String(obj["_id"]);
+                        objId = bcoPrefix + "0000".substring(0, 10 - String(obj["_id"]).length) + String(obj["_id"]);
+                        objId = objId.replace("DSBCO_", "GLYDS");
                         gridDivs += '<div style="'+s+'">';
                         gridDivs += (obj["status"] == 1 ? cat + ' ' + objId  + " " :
                                                 cat + ' ('+objId+')' + ' <font color=red>in progress</font>');
@@ -384,7 +406,7 @@ function rndrGridContent(){
                         gridDivs += obj["species"] + ', ' + fileType.toUpperCase();
                         gridDivs += '</div>';
 
-                        var s = 'position:absolute;left:15%;top:60px;width:70%;height:50px;font-size:18px;';
+                        var s = 'position:absolute;left:15%;top:60px;width:70%;height:50px;font-size:16px;';
 			s += 'font-weight:bold;color:#004065;vertical-align:bottom;';
                         s += 'border:0px solid red;';
 			var detailsUrl = '/' + objId ;
@@ -395,14 +417,14 @@ function rndrGridContent(){
 			gridDivs += '</a>';
 		
 			var iconUrl = htmlRoot + '/content/' + iconFileName;
-			var s = 'position:absolute;left:10%;top:120px;width:80%;height:130px;font-size:18px;';
+			var s = 'position:absolute;left:10%;top:120px;width:80%;height:130px;font-size:16px;';
 			s += 'font-size:12px;border:0px solid red;';
 			gridDivs += '<div style="'+s+'">';
 			gridDivs += miniTable;
 			gridDivs += (miniTable == '' ? '<img src="'+iconUrl+'" height=90%>' : "");
 			gridDivs += '</div>';
 		
-			var s = 'position:absolute;left:10%;top:250px;width:80%;height:40px;font-size:18px;';
+			var s = 'position:absolute;left:10%;top:250px;width:80%;height:40px;font-size:16px;';
                         s += 'font-size:12px;border:0px solid red;';
 			gridDivs += '<div style="'+s+'">';
 			gridDivs += obj["description"];
@@ -410,7 +432,7 @@ function rndrGridContent(){
 			gridDivs += '</div>';	
 			
 			//var datasetName = obj["filename"];
-		 	//var url1 = htmlRoot + '/datasets/reviewed/'+datasetName
+		 	//var url1 = htmlRoot + '/ln2wwwdata/reviewed/'+datasetName
 			//var s = 'position:absolute;left:5%;top:300px;width:90%;height:20px;';
                         //s += 'font-size:13px;text-align:center;color:#004065;cursor:hand;border:0px solid red;';
 			//var linkId = "dataset_" + i;
@@ -589,7 +611,7 @@ function setPreviewContent(dataObj, containerId){
 	reqObj.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
         reqObj.onreadystatechange = function() {
                 if (reqObj.readyState == 4 && reqObj.status == 200) {
-                	if (reqObj.fileType == "csv"){
+			if (reqObj.fileType == "csv"){
 				var resObj = JSON.parse(reqObj.responseText);
 				drawTable(resObj["dataframe"], reqObj.containerId, {"pagesize":25});
 			}
@@ -660,6 +682,15 @@ function isValidJson(str) {
 
 
 
+$(document).on('click', '#searchbtn', function (event) {
+    event.preventDefault();
+    $('html').animate({scrollTop:0}, 'fast');
+    $('body').animate({scrollTop:0}, 'fast');
+    fillGridViewCn("1");
+});
+
+
+
 
 
 $(document).on('click', '#filterlink', function (event) {
@@ -699,16 +730,21 @@ $(document).on('click', '#saveobject', function (event) {
         reqObj.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
         reqObj.onreadystatechange = function() {
                 if (reqObj.readyState == 4 && reqObj.status == 200) {
-			var resJson = JSON.parse(reqObj.responseText);
-                        window.location.href = "/edit/" + resJson["objid"]
+			console.log(reqObj.responseText);
+                        var resJson = JSON.parse(reqObj.responseText);
+                        if(resJson["status"] != 1){
+                            $("#pagecn").html("<br><br>" + resJson["errormsg"]);
+                        }
+                        else{
+                            window.location.href = "/edit/" + resJson["_id"]
+                        }
                 }
         };
 
 	obj["objid"] = objId;
         var postData = 'mode=json&svc=save_object&injson=' + JSON.stringify(obj);
         reqObj.send(postData);
-        console.log(postData);
-
+        //console.log(postData);
 
 
 });
@@ -720,13 +756,8 @@ $(document).on('click', '.menucell', function (event) {
         event.preventDefault();
 
 	pageId = this.id;
-	var sections = getSections();
-        $("#modulesectionscn").html(sections);
-        $("#modulesearchboxcn").html(getSearchBoxCn());
-
 	setPageFrame();
         fillFrameCn();
-	$("#modulesectionscn").css("display", "none");
 
 });
 
@@ -734,14 +765,10 @@ $(document).on('click', '.menucell', function (event) {
 $(document).on('click', '.menucellselected', function (event) {
         event.preventDefault();
 
-	var sections = getSections();
-        $("#modulesectionscn").html(sections);
-        $("#modulesearchboxcn").html(getSearchBoxCn());
         
         pageId = this.id;
         setPageFrame();
         fillFrameCn();
-        $("#modulesectionscn").css("display", "none");
 
 });
 
@@ -807,6 +834,27 @@ $(document).on('click', '.previewlink', function (event) {
         $("body").append(bgdiv + popdiv);
         setPreviewContent(resJson["datasets"][datasetIndex],  'popdiv2');
 });
+
+
+
+
+///////////////////////////////////////////////////
+$(document).on('change', '.versionselector', function (event) {
+        
+    event.preventDefault();
+    objVer = $("#versioncn option:selected").val();
+
+    var imgFile = htmlRoot + "/content/loading.gif";
+    var gifImage = '<img src='+imgFile+' style="width:20%;margin-left:40%;margin-top:2%;">';
+    $("#pagecn").html(gifImage);
+
+
+    fillEntryViewCn();
+
+
+
+});
+
 
 ///////////////////////////////////////////////////
 $(document).on('click', '.commentlink', function (event) {
@@ -936,7 +984,6 @@ $(document).on('click', '.readmelink', function (event) {
 	event.preventDefault(); 
 	var i = parseInt(this.id.split("_")[1]);
 
-
 	$("html, body").animate({ scrollTop: 0 }, "0");
 	
  
@@ -967,7 +1014,7 @@ $(document).on('click', '.readmelink', function (event) {
 
 
 
-	var readmeFile = '/datasets/reviewed/' + resJson["datasets"][i]["readmefilename"];
+	var readmeFile = '/ln2wwwdata/reviewed/' + resJson["datasets"][i]["readmefilename"];
 	setReadmeContent(readmeFile, '#popdiv2');
 
 });
@@ -1006,7 +1053,7 @@ $(document).on('click', '#savecomment', function (event) {
         reqObj.onreadystatechange = function() {
                 if (reqObj.readyState == 4 && reqObj.status == 200) {
                        try {
-                                console.log(reqObj.responseText);
+                                //console.log(reqObj.responseText);
 				var resJson = JSON.parse(reqObj.responseText);
 				if (resJson["taskStatus"] == 1){
 					var s = 'font-size:13px;width:80%;margin-left:10%;';

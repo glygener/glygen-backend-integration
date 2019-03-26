@@ -1,0 +1,13 @@
+database_name,template_url
+pubmed,https://www.ncbi.nlm.nih.gov/pubmed/%s
+refseq,https://www.ncbi.nlm.nih.gov/protein/%s
+hgnc,https://www.genenames.org/cgi-bin/gene_symbol_report?hgnc_id=%s
+uniprot_isoform,http://uniprot.org/%s
+uniprotkb,http://uniprot.org/%s
+kegg,http://example.org/%s
+icd9,http://example.org/%s
+mesh,http://example.org/%s
+umls,http://example.org/%s
+omim,https://www.omim.org/entry/%s
+do,http://disease-ontology.org/term/DOID:%s
+biomuta,https://hive.biochemistry.gwu.edu/biomuta/proteinview/%s

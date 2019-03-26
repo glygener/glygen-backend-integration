@@ -1,0 +1,73 @@
+    
+human isoforms
+##############################
+                "rdf release file"      "latest nt file"
+                ==================      ================
+    Total       93837                   93776
+    with seq    93786                   93721
+
+
+human canonicals
+##############################
+
+                                  "rdf release file"        "latest nt file"
+                                  ==================        ================
+set-1 (reviewed canonicals)       20230                     20075
+set-4 (unreviewed canonicals)      1308                     931 (should be reduced further to 927)
+
+
+Here is the reason why set-4 should be reduced further to 927. The following isoforms
+should not be canonicals since they are encoded by genes that are already represented
+by reviewed canonicals.
+
+    A0A1C7CYW4-1 --> this should join the reviewed canonical O75787-1 (both belong to gene HGNC:18305)
+    E7EW58-1 --> this should join the reviewed canonical Q9H3W5-1 (both belong to gene HGNC:17200)
+    H3BP13-1 --> this should join the reviewed canonical Q9UL33-1 (both belong to gene HGNC:30887)
+    H6UMI1-1 --> this should join the reviewed canonical O95166-1 (both belong to gene HGNC:4067)
+
+
+
+
+
+    mouse isforms
+    ##############################
+    
+                "rdf release file"      "latest nt file"
+                ==================      ================
+    Total       60753                   60710
+    with seq    60717                   60710
+
+    isoforms with sequences in "latest nt file" but not in "rdf release file"
+     L7N1X6-2
+     Q6DFW0-2
+    
+    isoforms with sequences in "rdf release file" but not in "latest nt file"
+     P06800-2
+     P06800-3
+     P98203-3
+     Q61466-2
+     Q80Z60-2
+     Q80Z60-3
+     Q8K2J4-2
+     Q9D4I2-3
+     Q9Z1J3-2
+
+
+
+    mouse canonicals
+    ##############################
+
+                                   "rdf release file"      "latest nt file"
+                                    ==================      ================
+    set-1 (reviewed canonicals)     16940                   16883
+    set-4 (unreviewed canonicals)   8550                    5393 (should be reduced further to 5391)
+
+
+    Here is the reason why set-4 should be reduced further to 5391. The following isoforms
+    should not be canonicals since they are encoded by genes that are already represented
+    by reviewed canonicals.
+
+    F6VRN1-1 --> this should join the reviewed canonical Q6JHY2-2 (both belong to gene Smgc)
+    A2CEK3-1 --> this should join the reviewed canonical Q9D0F9-1 (both belong to gene Pgm2)
+
+

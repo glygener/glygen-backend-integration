@@ -1,0 +1,9 @@
+SELECT ?s ?pprotein 
+WHERE {
+	?res glyco:is_glycan_database <http://purl.jp/bio/12/database/jcggdb>
+	?s rdfs:seeAlso ?res .
+	?s glyco:has_glycosequence ?o .
+
+
+
+}

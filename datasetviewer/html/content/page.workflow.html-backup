@@ -1,0 +1,51 @@
+<html>
+<br>
+<b>Data Integration Workflow </b>
+<br><br>
+Based on use cases collected from the user community, various glycan, protein and proteoform datasets are collected from major data repositories and data generators. These datasets pass through intensive quality control protocols, and data model is created to represent the relationship between data fields. The data model created relies on existing GlycoRDF and UniProt Core namespaces or ontologies created for glycan and protein data respectively. Finally, triples are generated based on the data model and loaded to a triple store which is accessible to GlyGen front and other sites through RESTful APIs. The cleaned datasets that were used to generate triples are also made available for browsing and downloads through the datasetview interface.
+
+<br><br>
+<table width=100% border=1>
+    <tr>
+<td width=40% valign=top>
+<img src="/content/workflow.2.png" width=100% style="margin:50px 0px 0px 0px;">
+</td>
+<td valign=top>
+	<table width=90% style="font-size:11px;margin:20px;" border=1>	
+		<tr><td colspan=2><b>Collected Use Cases</b></td></tr>
+		<tr><td width=20>&nbsp;</td><td>257 use cases were collected from more than 100 researchers from several biomedical disciplines impacted by glycobiology. The use cases were further condensed to 114 distinct use cases and were grouped into six categories</td></tr>
+		
+		<tr><td colspan=2><br><b>Major Data Resources</b></td></tr>
+		<tr><td>&nbsp;</td><td>GlyGen specific data is collected from several public resources such as UniProtKB, GlyTouCan, UniCarbKB, NCBI RefSeq, NCBI PubChem, Protein Resource Ontology, BioMuta, BioXpress for data integration into GlyGen</td></tr>
+	
+		<tr><td colspan=2><br><b>Data Generators</b></td></tr>
+		<tr><td>&nbsp;</td><td>GlyGen specific data is also collected by collaborating with individual PIs, researchers, and labs generating data</td></tr>
+
+		<tr><td colspan=2><br><b>Data categorization, Integration, Quality control</b></td></tr>
+		<tr><td>&nbsp;</td><td>From the use cases and collected data, selected use cases, and data are categorized into three categories - Protein centric, Proteoform centric and Glycan centric data category. Once the data is categorized, it is integrated into GlyGen, based on the aims and goals of the project phase. The integrated data is verified and checked for quality manually and automatically with the help of scripts</td></tr>
+
+		<tr><td colspan=2><br><b>Datasets and Metadata and Data Model</b></td></tr>
+		<tr><td>&nbsp;</td><td>After the data is categorized, integrated and verified, datasets in CSV format are created from the data. The datasets in Protein and Proteoform category have UniProtKB canonical identifiers as the primary key whereas datasets in Glycan category have GlyTouCan identifiers as the primary key. Once the datasets are created, a detailed readme file is created based on the BioCompute Object specification that not only provides metadata information about the dataset but also enables reproducibility of the dataset. In Parallel, data model network is created after the data is categorized, integrated and verified which helps to understand how the data in different categories are linked together. The datasets and data model network are then displayed on the Dataset Collection Viewer interface</td></tr>
+
+		<tr><td colspan=2><br><b>Dataset viewer</b></td></tr>
+		<tr><td>&nbsp;</td><td>The dataset viewer interface allows to view the datasets, preview the data and also to download the data. It also allows reading the readme for the generated datasets. The dataset viewer interface also contains web pages for GlyGen APIs, FAQs, Data model and data integration workflow</td></tr>
+
+		<tr><td colspan=2><br><b>Triple Generation</b></td></tr>
+		<tr><td>&nbsp;</td><td>RDF N-Triples are generated from the CSV datasets and stored in GlyGen triplestore</td></tr>
+
+		<tr><td colspan=2><br><b>Triplestore</b></td></tr>
+		<tr><td>&nbsp;</td><td>The GlyGen triplestore uses Virtuoso database to store all the N-Triples and can be accessed via RESTful GlyGen APIs and via public resources RESTful APIs</td></tr>
+
+		<tr><td colspan=2><br><b>APIs, GlyGen Frontend and Public resources</b></td></tr>
+		<tr><td>&nbsp;</td><td>The GlyGen frontend can access the GlyGen triplestore via the GlyGen RESTful APIs and displays the user requested GlyGen data. Similarly, other public resources can access the GlyGen Triplestore via RESTful APIs for GlyGen data and provide it to their users</td></tr>
+
+	</table>
+</td>
+</tr>
+</table>
+
+<br><br><br>
+</html>
+
+
+

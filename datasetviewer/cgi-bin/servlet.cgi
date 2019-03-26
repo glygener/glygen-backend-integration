@@ -51,57 +51,48 @@
 	$VHASH{MODE} = (!$VHASH{MODE}  ? "html" : $VHASH{MODE});
 
     	if($VHASH{MODE} eq "json"){ #Construct and return json text
-       		if($VHASH{SVC} eq "getPreviewRecords"){
-                        my $cmd = qq{python $PHASH->{$SERVER}{pathinfo}{cgipath}/svc/getPreviewRecords.py -j '$VHASH{INJSON}'};
-                        my $jsonText = `$cmd`;
-                        print "$jsonText";
-                        exit;
-                }
-		elsif($VHASH{SVC} eq "getComment"){
-			my $cmd = qq{python $PHASH->{$SERVER}{pathinfo}{cgipath}/svc/getComment.py -j '$VHASH{INJSON}'};
+		if($VHASH{SVC} eq "get_comment"){
+			my $cmd = qq{python $PHASH->{$SERVER}{pathinfo}{cgipath}/svc/get_comment.py -j '$VHASH{INJSON}'};
                         my $jsonText = `$cmd`;
                         print "$jsonText";
 			exit;
 		}
-		elsif($VHASH{SVC} eq "saveComment"){
-                        my $cmd = qq{python $PHASH->{$SERVER}{pathinfo}{cgipath}/svc/saveComment.py -j '$VHASH{INJSON}'};
+		elsif($VHASH{SVC} eq "save_comment"){
+                        my $cmd = qq{python $PHASH->{$SERVER}{pathinfo}{cgipath}/svc/save_comment.py -j '$VHASH{INJSON}'};
                         my $jsonText = `$cmd`;
                         print "$jsonText";
                         exit;
                 }
-		elsif($VHASH{SVC} eq "getDataModelTable"){
-			my $cmd = qq{python $PHASH->{$SERVER}{pathinfo}{cgipath}/svc/getDataModelTable.py};
+		elsif($VHASH{SVC} eq "get_data_model_table"){
+			my $cmd = qq{python $PHASH->{$SERVER}{pathinfo}{cgipath}/svc/get_data_model_table.py};
 			my $jsonText = `$cmd`;
 			print "$jsonText";
 			exit;
 		}
-		elsif($VHASH{SVC} eq "get_objects"){
-			my $cmd = qq{python $PHASH->{$SERVER}{pathinfo}{cgipath}/svc/get_objects.py};
+		elsif($VHASH{SVC} eq "search_objects"){
+			my $cmd = qq{python $PHASH->{$SERVER}{pathinfo}{cgipath}/svc/search_objects.py -j '$VHASH{INJSON}'};
 			my $jsonText = `$cmd`;
 			#print $cmd;
 			print "$jsonText";
 			exit;
 		}
-		elsif($VHASH{SVC} eq "get_single_object"){
-			my $cmd = qq{python $PHASH->{$SERVER}{pathinfo}{cgipath}/svc/get_single_object.py -o $VHASH{OBJID}};
-			my $jsonText = `$cmd`;
-			print "$jsonText";
-			exit;
-		}	
-		elsif($VHASH{SVC} eq "save_object"){
-			my $cmd = qq{python $PHASH->{$SERVER}{pathinfo}{cgipath}/svc/save_object.py -j '$VHASH{INJSON}'};
-			my $jsonText = `$cmd`;
-			print "$jsonText";
-			exit;
-		}
                 elsif($VHASH{SVC} eq "get_readme_txt"){
-                        my $cmd = qq{python $PHASH->{$SERVER}{pathinfo}{cgipath}/svc/get_readme_txt.py -o $VHASH{OBJID}};
+                        my $cmd = qq{python $PHASH->{$SERVER}{pathinfo}{cgipath}/svc/get_readme_txt.py -o $VHASH{OBJID} -v $VHASH{OBJVER}};
                         my $jsonText = `$cmd`;
                         print "$jsonText";
                         exit;
                 }
+                elsif($VHASH{SVC} eq "get_bco"){
+                        my $cmd = qq{python $PHASH->{$SERVER}{pathinfo}{cgipath}/svc/get_bco.py -o $VHASH{OBJID} };
+                        $cmd .= ($VHASH{OBJVER} ne ""  ? " -v $VHASH{OBJVER}" : "");
+                        my $jsonText = `$cmd`;
+                        print "$jsonText";
+                        #print qq{$cmd};
+                        exit;
+                }
                 elsif($VHASH{SVC} eq "get_dataset"){
-                        my $cmd = qq{python $PHASH->{$SERVER}{pathinfo}{cgipath}/svc/get_dataset.py -o $VHASH{OBJID}};
+                        my $cmd = qq{python $PHASH->{$SERVER}{pathinfo}{cgipath}/svc/get_dataset.py -o $VHASH{OBJID} };
+                        $cmd .= ($VHASH{OBJVER} ne "\"\""  ? " -v $VHASH{OBJVER}" : "");
                         my $jsonText = `$cmd`;
                         print "$jsonText";
                         exit;
@@ -133,28 +124,31 @@
                 ,"downloadBase" => "downloadbase"
                 ,"moduleRelease" => "release"
 		,"server" => "server"
-	);
+	        ,"bcoPrefix" => "bcoprefix"
+        );
         my %jsVarHash = (
                 "gpageId" => "GPAGEID"
                 ,"pageId" => "PAGEID"
 		,"objId" => "OBJID"
 		,"readOnly" => "READONLY"
         );
-	
-	my @gjsFiles = ('jquery.min.js', 'loader.js', 'vjGoogleChart.js', 'common.js', 
-			 'libFuncs.js'); 
-        my @gcssFiles = ('global.css', 'googlefonts.css');
-        my @jsFiles = ('module.js');
-        my @cssFiles = ();
+        
+        my @gjsFiles = ();
+        my @gcssFiles = ();
+        my @jsFiles = ('jquery.min.js', 'loader.js', 'vjGoogleChart.js', 'global.js', 'module.js');
+        my @cssFiles = ('global.css', 'googlefonts.css');
 
 	my $gheadLinks = GetGlobalHeadLinks(\@gcssFiles, \@gjsFiles);
 	my $headLinks = GetModuleHeadLinks(\@cssFiles, \@jsFiles, \%jsParHash, \%jsVarHash);
 	#my $headerDivOne = getHeaderDivOne();        
-        my $headerDivTwo = getHeaderDivTwoNew(); 
-	my $glygenLinks = getGlygenLinks();
+        my $headerDivTwo = getHeaderDivTwo(); 
 	
-	my $glygenDomain = qq{http://$SERVER.glygen.org};
-	$glygenDomain = ($SERVER eq "prd" ? qq{http://glygen.org} : $glygenDomain);
+
+        my $moduleDomain = qq{https://$SERVER.$PHASH->{project}.org};
+        $moduleDomain = ($SERVER eq "prd" ? qq{https://$PHASH->{project}.org} : $moduleDomain);
+        
+        my $projectHeader = getProjectHeader($moduleDomain, $PHASH->{project});
+        my $projectFooter = getProjectFooter($moduleDomain, $PHASH->{project});
 
 
 	print qq{<html>
@@ -164,25 +158,14 @@
 	        
     		<meta http-equiv="X-UA-Compatible" content="IE=edge">
     		<META HTTP-EQUIV="Pragma" CONTENT="no-cache">
-
-    		<link rel="stylesheet" type="text/css" href="$glygenDomain/libraries/bootstrap/css/bootstrap.min.css">
-    		<!--[if lt IE 9]>
-    			<script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
-    			<script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
-    		<![endif]-->
-    		<link rel="stylesheet" type="text/css" href="$glygenDomain/css/style.css">
-
-
-		$gheadLinks $headLinks $glygenLinks
+		$gheadLinks $headLinks 
 		
 		</head> 
 	 	<BODY style="background:#fff;">
-		
-		<script src="$glygenDomain/libraries/w3.js"></script>
-    		<div w3-include-html="/content/header.html"></div>
-    		<script>w3.includeHTML();</script>
 
-		<DIV class="container" style="margin-bottom: 480px;">
+                $projectHeader
+
+                <DIV class="container-fluid text-center homepageContainer">
 			<form name=form1 method=POST action=biomuta enctype="multipart/form-data">
 			$headerDivTwo
 			<div class=pagewrapper>
@@ -193,16 +176,9 @@
         		<input type=hidden name=action value="">
         		</form>
  		</DIV>
-		
-    		<div w3-include-html="/content/footer.html"></div>
-    		<script type="text/javascript" src="$glygenDomain/libraries/jquery/jquery-3.1.js"></script>
-    		<script type="text/javascript" src="$glygenDomain/libraries/bootstrap/js/bootstrap.min.js"></script>
-    		<script src="$glygenDomain/js/navbar.js"></script>
-    		<script src="$glygenDomain/js/ws_url.js"></script>    
-		<!-- script for getting Web Service URLs -->
-    		<script src="$glygenDomain/js/activity_tracker.js"></script>  
-		<!-- script for logging activity -->
-    		<script src="$glygenDomain/js/utility.js"></script>
+	
+                $projectFooter
+	
 
 		</BODY>
     		</html>
@@ -215,10 +191,154 @@
 
 
 
+###########################
+sub getProjectHeader{
+        my($moduleDomain, $project) = @_;
 
+        if ($project eq "oncomx"){
+                return qq{
+                <link href="/csslib/style.css" rel="stylesheet">    
+                <link href="$moduleDomain/static/themes/Imperial/lib/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+                        <link href="$moduleDomain/static/themes/Imperial/css/style.css?2" rel="stylesheet">
+                        <link href="$moduleDomain/static/themes/Imperial/css/onco-custom.css" rel="stylesheet">
+        
+                        <header id="header">
+                        <div class="container">
+                        <nav id="nav-menu-container" style="float:left">
+                        <ul class="nav-menu">
+                        <li><a href="$moduleDomain#home" class="btn-get-started pull-left">Home</a></li>
+                        <li><a href="$moduleDomain#about" class="btn-get-started">Explore</a></li>
+                        <li><a href="$moduleDomain#subscribe" class="btn-get-started">Downloads</a></li>
+                        <li><a href=“$moduleDomain#about" class="btn-get-started">Statistics</a></li>
+                        <li><a href="$moduleDomain/oncodataview/" class="btn-get-started">Original Data Sources</a></li>
+                        </ul>
+                        </nav>
+                        <nav id="nav-menu-container" style="float:right">
+                        <ul class="nav-menu">
+                        <li><a href="$moduleDomain/static/docs/OncoMX_global_readme_v1.0_02Oct2018.txt">Help</a></li>
+                         <li><a href="$moduleDomain#team">About Us</a></li>
+                        <li><a href="$moduleDomain#contact">Contact Us</a></li>
+                        </ul>
+                        </nav>
+                        </div>
+                        </header>
+                };
+        }
+        else{
+                return qq{
+                <link rel="stylesheet" type="text/css" href="$moduleDomain/libraries/bootstrap/css/bootstrap.min.css">
+                <!--[if lt IE 9]>
+                        <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
+                        <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+                <![endif]-->
+                <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.4.1/css/all.css" integrity="sha384-5sAR7xN1Nv6T6+dT2mhtzEpVJvfS3NScPQTrOxhwjIuvcA67KV2R5Jz6kr4abQsz" crossorigin="anonymous">
+                <link rel="stylesheet" type="text/css" href="$moduleDomain/css/alertify.css">
+                <link rel="stylesheet" type="text/css" href="$moduleDomain/css/style.css">
+                <link rel="stylesheet" type="text/css" href="$moduleDomain/css/server.css">
+                <link rel="stylesheet" href="$moduleDomain/css/reset.css">
 
+                <div>
+                
+                    <div class="alert navbar-fixed gg-alert fade in" id="tracking_banner">
+                    
+                <span>Do you want <strong>GlyGen</strong> to remember your searches for your future use? This can be changed at any time in the <strong>My GlyGen</strong> section.</span>
+                
+                <br>
+                
+                <button type="button" class="btn btn-default gg-btn-margin" onclick='logID()'>Allow</button>
+                   
+                <button type="button" class="btn btn-default gg-btn-margin" onclick='doNotLog()'>Don't Allow</button>
+                
+                </div>
+                <!----> 
+                <nav class="navbar navbar-inverse gg-navbar gg-navbar-inverse">
+                    <div class="container-fluid">
+                        <div class="navbar-header"> 
+                            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="$moduleDomain/index.html#myNavbar">
+                                <span class="icon-bar"></span>
+                                <span class="icon-bar"></span>
+                                <span class="icon-bar"></span>                   
+                            </button>
+                            <a class="navbar-brand glygenmenu" id="index.html" href="$moduleDomain/index.html"><img id="logo" src="/content/logo-glygen.svg">
+                            </a>
+                        </div>
+                        
+                        <div class="collapse navbar-collapse gg-collapse gg-nav-item" id="myNavbar"> 
+                            <ul class="nav navbar-nav gg-nav-nav ">
+                                <li>
+                                    <a alt="home" class=glygenmenu href="$moduleDomain/index.html">HOME</a>
+                                </li>
+                                <li class="dropdown">
+                                    <a classs="dropdown-toggle glygenmenu" data-toggle="dropdown" alt="explore" href="$moduleDomain/index.html">EXPLORE 
+                                        <span class="caret"></span>
+                                    </a>
+                                    <ul class="dropdown-menu gg-dropd-menu">
+                                        <li>
+                                            <a class=glygenmenu alt="glycan" href="$moduleDomain/glycan_search.html">Glycan</a>
+                                        </li>
+                                        <li>
+                                            <a class=glygenmenu alt="protein" href="$moduleDomain/protein_search.html">Protein</a>
+                                        </li>
+                                        <li>
+                                            <a class=glygenmenu alt="proteoform" href="$moduleDomain/glycoprotein_search.html">Glycoprotein</a>
+                                        </li>
+                                    </ul>
+                                </li>
+                                <li>
+                                    <a class=glygenmenu alt="quick search" href="$moduleDomain/index.html#tryMe">TRY&nbsp;ME</a>
+                                </li>
+                                <li>
+                                    <a class=glygenmenu alt="quick search" href="$moduleDomain/quick_search.html">QUICK&nbsp;SEARCH</a>
+                                </li>
+                                <li>
+                                    <a class=glygenmenu alt="about" href="$moduleDomain/about.html">ABOUT</a>
+                                </li>
+                                
+                                <li class="dropdown">
+                                    <a class="dropdown-toggle" data-toggle="dropdown" alt="explore" href="$moduleDomain/index.html#">MORE 
+                                        <span class="caret"></span>
+                                    </a>
+                                    <ul class="dropdown-menu gg-dropd-menu">
+                                        <li>
+                                            <a class=glygenmenu alt="resources" href="$moduleDomain/resources.html">Resources</a>
+                                        </li>
+                                        <li>
+                                            <a class=glygenmenu alt="survey" href="$moduleDomain/survey.html" class="selected">Survey </a>
+                                        </li>
+                                        <li>
+                                            <a class=glygenmenu  alt="contact us" href="$moduleDomain/contact.html">Contact Us</a>
+                                        </li>
+                                    </ul>
+                                </li>
+                            </ul>
+                            <ul class="nav navbar-nav gg-nav-nav pull-right">
+                                <li class="dropdown">
+                <!--                    <a href="#" class="dropdown-toggle" data-toggle="dropdown">-->
+                                    <a class=glygenmenu href="$moduleDomain/glygen_settings.html">   
+                                        <span class="glyphicon glyphicon-user"></span> MY&nbsp;GLYGEN 
+                <!--                        <span class="caret"></span>-->
+                                    </a>
+                <!--
+                                    <ul class="dropdown-menu gg-dropd-menu">
+                                        <li>
+                                            <a class=glygenmenu href="$moduleDomain/glygen_settings.html" class="gg-dropd-backr">
+                                                <span class="glyphicon glyphicon-wrench"></span> Privacy Settings
+                                            </a>
+                                        </li>
+                                    </ul>
+                -->
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </nav>
+                
+                
+                </div>
+                };
+        }
 
-
+}
 
 
 
@@ -226,44 +346,96 @@
 
 
 #############################
-sub getGlygenLinks{
+sub getProjectFooter{
+        my($moduleDomain, $project) = @_;
+
+        my $libRoot = ($project eq "oncomx" ? qq{$moduleDomain/static/libraries} : qq{$moduleDomain/libraries});        
+        if ($project eq "oncomx"){
+                return qq{
+                <div class="container-fluid text-center">
+                <div class="row footer" style="background:#000;">
+                <div class="col-sm-12 col-sm-3 copyrights">
+                </div>
+                <div class="col-sm-12 col-sm-4 policy">
+                <ul class="bottom-row-right">
+                        <li><a href="$moduleDomain/license.html">License</a></li>
+                        <li><a href="$moduleDomain/privacy_policy.html">Privacy&nbsp;Policy</a></li>
+                        <li><a href="$moduleDomain/disclaimer.html">Disclaimer</a></li>
+                        <li><a href="$moduleDomain/contact.html">Contact&nbsp;Us</a></li>
+                </ul>
+                </div>
+                <div class="col-sm-12 col-sm-2 logos">
+                </div>
+                </div>
+                </div>
+                };
+        }
+        else{
+                return qq{
+
+                <div>
+                
+                    <div class="container-fluid text-center"> 
+                    <div class="row footer">
+                        <div class="col-sm-12 col-sm-3 copyrights">     
+                            &copy; 2018 - GlyGen All rights reserved by <a href="http://www.uga.edu/" target="_blank">UGA</a>&nbsp;and&nbsp;<a href="https://www.gwu.edu/" target="_blank">GWU</a> 
+                        </div>  
+                
+                        <div class="col-sm-12 col-sm-4 policy"> 
+                            <ul class="bottom-row-right">
+                                <li><a href="$moduleDomain/license.html">License</a></li>
+                                <li><a href="$moduleDomain/privacy_policy.html">Privacy&nbsp;Policy</a></li>
+                                <li><a href="$moduleDomain/disclaimer.html">Disclaimer</a></li>
+                                <li><a href="$moduleDomain/contact.html">Contact&nbsp;Us</a></li>
+                            </ul>
+                        </div>
+                
+                        <div class="col-sm-12 col-sm-3 grant">Funded by
+                            <a href=" https://commonfund.nih.gov/" target="_blank">NIH Common Funds</a> 
+                            <br>
+                            <span>Grant # 
+                            <a href="http://grantome.com/grant/NIH/U01-GM125267-01" target="_blank">1U01GM125267&nbsp;-&nbsp;01</a>
+                            </span>
+                        </div> 
+                
+                        <div class="col-sm-12 col-sm-2 logos">
+                            <a href="https://www.ccrc.uga.edu/" target="_blank">
+                                <img id="logo-uga" src="/content/logo-uga.png">
+                            </a> 
+                            <a href="https://smhs.gwu.edu/" target="_blank">
+                                <img id="logo-gwu" src="/content/logo-gwu.png">
+                            </a>  
+                        </div>
+                    </div>
+                </div>
+                
+                </div>
+
+                <script type="text/javascript" src="$moduleDomain/libraries/jquery/jquery-3.1.js"></script>
+                <script type="text/javascript" src="$moduleDomain/libraries/bootstrap/js/bootstrap.min.js"></script>
+                <script src="$moduleDomain/js/navbar.js"></script>
+                <script src="$moduleDomain/js/ws_url.js"></script>    
+                <!-- script for getting Web Service URLs -->
+                <script src="$moduleDomain/js/activity_tracker.js"></script>  
+                <!-- script for logging activity -->
+                <script src="$moduleDomain/js/utility.js"></script>
 
 
-return qq{
-
-};
-
-
-
+                };
+        }
 }
 
 
 
-###########################
-sub getGlygenHeader{
-
-	my $s1 =qq{width:100%;height:115px;border-top:5px solid #555;box-shadow: 2px 2px 2px #ccc;};
-	my $s2 =qq{position:absolute;left:15;top:15;font-size:35;color:#333;font-family:'Arial Narrow', Arial, sans-serif;};
-
-	my $s3 = qq{position:absolute;left:15;top:75;width:40;height:3;background:#333;};
-	my $s4 = qq{position:absolute;left:15;top:90;font-size:12px;font-style:italic;color:#777;};
-
-return qq{
-<div style="$s1">
-<a class="" href="http://tst.glygen.org">
-<div style="$s2">GlyGen</div>
-</a>
-<div style="$s3"></div>
-<div style="$s4">Integration of biomedical databases</div>
-
-</div>
-  
 
 
 
 
-};
 
 
 
-}
+
+
+
+
+

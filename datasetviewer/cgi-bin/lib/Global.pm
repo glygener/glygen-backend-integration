@@ -37,12 +37,23 @@ sub getHeaderDivOne{
 }
 
 #################################
-sub getHeaderDivTwoNew{
+sub getHeaderDivTwo{
 
     #my $icon = GetModuleIcon(15, 3, 7, $PHASH->{modulemenufg});
         my $icon = "";
 
-        my $searchBoxDiv = qq{<div class="modulesearchboxcn" id=modulesearchboxcn></div>};
+
+        my $queryValue = qq{<input type=text class=queryvalue id=queryvalue value="">};
+        my $searchBtn = qq{<input type=submit class=searchbtn id=searchbtn value="Search">};
+        my $msg_one = qq{<span style="font-size:12px;font-weight:bold;">Search term</span>};
+        my $msg_two = qq{<span style="font-size:11px;">You can search by BCO ID, name or contributor.</span>};
+                                
+        my $searchTable = qq{<table width=100%>
+            <tr><td width=70% style="padding:0px;">$msg_one<br>$queryValue<br>$msg_two</td>
+            <td width=10%><br>$searchBtn<br>&nbsp;</td>
+            </tr></table>
+        };
+        my $searchBoxDiv = qq{<div class="modulesearchboxcn" id=modulesearchboxcn>$searchTable</div>};
         my $moduleHeaderClass = qq{moduleheaderwrapper};
         if($PHASH->{queryform}{nosearch}){
                 $searchBoxDiv = qq{};
@@ -50,10 +61,12 @@ sub getHeaderDivTwoNew{
         }
        
         my $menuTitleDiv = qq{
-                <div id=pagelinkscn style="width:100%;height:20;text-align:right;"></div>
+                <div class=pagelinkscnwrapper>
+		<div id=pagelinkscn class=pagelinkscn>xxx</div>
+		</div>
 		<div class=$moduleHeaderClass style="background:$PHASH->{modulemenubg};">
                         <div class="moduleiconcn" id=moduleiconcn>$icon</div>
-                        <div id="moduletitlecn" class="moduletitlecn" style="color:$PHASH->{modulemenufg};">
+                        <div id="moduletitlecn" class="moduletitlecn" style="color:$PHASH->{modulemenufg};text-align:left;">
                         $PHASH->{title}
                         </div>
                         <div id="moduleversioncn" class="moduleversioncn" style="color:$PHASH->{modulemenufg};">
@@ -71,34 +84,6 @@ sub getHeaderDivTwoNew{
 }
 
 
-#################################
-sub getHeaderDivTwo{
-
-        my $icon = GetModuleIcon(15, 3, 7, $PHASH->{modulemenufg});
-	my $searchBoxDiv = qq{<div class="modulesearchboxcn" id=modulesearchboxcn></div>};
-	my $moduleHeaderClass = qq{moduleheaderwrapper};
-	if($PHASH->{queryform}{nosearch}){
-		$searchBoxDiv = qq{};
-		$moduleHeaderClass = qq{moduleheaderwrappernosearch};
-	}
-	my $menuTitleDiv = qq{
-		<div class=$moduleHeaderClass style="background:$PHASH->{modulemenubg};">
-			<div class="moduleiconcn" id=moduleiconcn>$icon</div>
-			<div class="moduletitlecn" style="color:$PHASH->{modulemenufg};">$PHASH->{title}</div>
-			$searchBoxDiv
-			<div class="modulesectionscn" id=modulesectionscn style="background:$PHASH->{modulemenubg};"></div>
-		</div>
-	};
-	my $moduleTitle = ($PHASH->{module} eq "global" ? "" : $menuTitleDiv);
-	return qq{
-                <div class="labtitlewrapper">
-                        <a href="$GPHASH->{$SERVER}{rootinfo}{ghomeurl}" style="text-decoration:none;">
-			<div class=labtitlecn>$GPHASH->{title}</div>
-                	</a>
-			$moduleTitle
-		</div>
-        };
-}
 
 
 

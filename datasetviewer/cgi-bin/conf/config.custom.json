@@ -1,0 +1,21 @@
+{
+    "dbinfo":{
+        "mongodbname":"glydb"
+        ,"mongodbuser":"glydbadmin"
+        ,"mongodbpassword":"glydbpass"
+    }
+    ,"pathinfo":{
+        "htmlroot":"/bco_editor/",
+        "schemaroot":"/bco_editor/schema/",
+        "htmlpath":"/software/bco_editor/html/",
+        "schemapath":"/software/bco_editor/html/schema/",
+        "bcoprefix":"http://data.glygen.org/GLYDS%s"
+    }
+}
+
+
+
+
+
+
+

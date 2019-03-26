@@ -1,0 +1,20 @@
+{
+    "human":{
+        "idmapping":[]
+        ,"properties":[]
+        ,"sequences":[]
+        ,"motif":[]
+        ,"classification":[]
+        ,"enzyme":[]
+    }
+    ,"mouse":{
+        "idmapping":[]
+        ,"properties":[]
+        ,"sequences":[]
+        ,"motif":[]
+        ,"classification":[]
+        ,"enzyme":[]
+    }
+}
+
+

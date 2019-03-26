@@ -2,206 +2,57 @@
 import re
 import datetime
 import os, hashlib, time, base64, string
+from collections import OrderedDict
 
 
-def Authenticate(DBH, username, password, sessionId, maxSessionAge, auth):
 
-	status, id, msg, fullname = 0, "", "", ""
-	if username != '' and password != '':
-		status, id, msg, fullname = TryLogin(DBH, username, password)
-		if status == 1:
-			status, id, fullname, msg = UpdateSession(DBH, username, 0, maxSessionAge)
-	elif sessionId != '':
-		status, sessionAge, msg = GetSessionAge(DBH, username, sessionId)
-		if status == 1 and sessionAge < int(maxSessionAge):
-			status, id, fullname, msg = UpdateSession(DBH, username, sessionAge, maxSessionAge)
-		elif status == 0:
-			fullname = ""
-		else:
-			msg = "Session timed out at " + str(sessionAge) + ' / ' +  maxSessionAge
-			fullname = ""
-			status = 0
-	else:
-		msg = "Not enough arguments"
-	auth['status'], auth['id'], auth['fullname'], auth['msg'] = status, id, fullname, msg
-	return
+import pymongo
 
+def connect_to_mongodb(db_obj):
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~
-def TryLogin(DBH, username, password):
-
-	status, id, msg, fullname = 0, "", "", ""
-	try:	
-		cur = DBH.cursor()
-		sql = ("SELECT passwd, fname, lname, sessionId, sessionTs FROM auth_user WHERE username = '%s' "
-			% (username))
-		cur.execute(sql)
-		row = cur.fetchone()
-		if row is None:
-			msg = "Entered user name does not exist!"
-		elif row[0] != password:
-			msg = "Bad password!"
-		else:
-			msg = "Now logged in!"
-			fullname = row[1] + ' ' + row[2]
-			status = 1
-	except:
-		msg = "Login failed"
-
-	return status, id, msg, fullname
+    try:
+        client = pymongo.MongoClient('mongodb://localhost:27017',
+            username=db_obj["mongodbuser"],
+            password=db_obj["mongodbpassword"],
+            authSource=db_obj["mongodbname"],
+            authMechanism='SCRAM-SHA-1',
+            serverSelectionTimeoutMS=10000
+        )
+        client.server_info()
+        dbh = client[db_obj["mongodbname"]]
+        return dbh, {}
+    except pymongo.errors.ServerSelectionTimeoutError as err:
+        return {}, {"taskstatus":0, "errormsg": "open-connection-failed"}
+    except pymongo.errors.OperationFailure as err:
+        return {}, {"taskstatus":0, "errormsg": "mongodb-auth-failed"}
 
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~
-def UpdateSession(DBH, username, sessionAge, maxSessionAge):
 
-	status, id, fullname, msg = 0, "", "", ""
-	try:
-		cur = DBH.cursor()
-		id = MakeSessionId()  + MakeSessionId()
-		string = "UPDATE %s set sessionId = '%s', sessionTs = CURRENT_TIMESTAMP "
-		string += "WHERE username = '%s'"
-		sql = (string % ("auth_user", id, username))
-		cur.execute(sql)
-		DBH.commit()
-		msg = "Session updated at " + str(sessionAge) + "/" + str(maxSessionAge)
-		status = 1
-		sql = ("SELECT passwd, fname, lname, sessionId, sessionTs FROM auth_user WHERE username = '%s' "
-                        % (username))
-                cur.execute(sql)
-                row = cur.fetchone()
-                fullname = row[1] + ' ' + row[2]
-	except:
-		msg = "Update session failed"
-
-        return status, id, fullname, msg
+def order_json_obj(json_obj, ordr_dict):
+    
+    for k1 in json_obj:
+        ordr_dict[k1] = ordr_dict[k1] if k1 in ordr_dict else 1000
+        if type(json_obj[k1]) is dict:
+            for k2 in json_obj[k1]:
+                ordr_dict[k2] = ordr_dict[k2] if k2 in ordr_dict else 1000
+                if type(json_obj[k1][k2]) is dict:
+                    for k3 in json_obj[k1][k2]:
+                        ordr_dict[k3] = ordr_dict[k3] if k3 in ordr_dict else 1000
+                    json_obj[k1][k2] = OrderedDict(sorted(json_obj[k1][k2].items(),key=lambda x: float(ordr_dict.get(x[0]))))
+                elif type(json_obj[k1][k2]) is list:
+                    for j in xrange(0, len(json_obj[k1][k2])):
+                        if type(json_obj[k1][k2][j]) is dict:
+                            for k3 in json_obj[k1][k2][j]:
+                                ordr_dict[k3] = ordr_dict[k3] if k3 in ordr_dict else 1000
+                                for kk in json_obj[k1][k2][j].keys():
+                                    ordr_dict[kk] = ordr_dict[kk] if kk in ordr_dict else 1000
+                                keyList = sorted(json_obj[k1][k2][j].keys(), key=lambda x: float(ordr_dict[x]))
+                                json_obj[k1][k2][j] = OrderedDict(sorted(json_obj[k1][k2][j].items(), key=lambda x: float(ordr_dict.get(x[0]))))
+            json_obj[k1] = OrderedDict(sorted(json_obj[k1].items(),key=lambda x: float(ordr_dict.get(x[0]))))
+    
+    return OrderedDict(sorted(json_obj.items(), key=lambda x: float(ordr_dict.get(x[0]))))
 
 
 
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~
-def GetSessionAge(DBH, username, sessionId):
-
-	status = 0
-	msg = ''
-	sql = ''
-	sessionAge = 1000000
-	try:
- 		cur = DBH.cursor()
-		string = "SELECT TIMESTAMPDIFF(SECOND, sessionTs, CURRENT_TIMESTAMP) sessionAge "
-		string += " FROM %s WHERE  username = '%s' AND sessionId = '%s'"
-		sql = (string % ("auth_user", username, sessionId))
-		cur.execute(sql)
-		row = cur.fetchone()
-		sessionAge = row[0]
-		status = 1
-	except:
-                status = 0
-		msg = "GetSessionAge  failed"      
-		   
-	return status, sessionAge, msg
-
-
-
-
-def EncryptString(password):
-	m = hashlib.md5()
-	m.update(password)
-	return m.hexdigest()
-
-
-
-
-def LoadParams(configfile, PHASH):
-
-	FR = open(configfile, "r")
-	lines = FR.readlines()
-	for line in lines:
-		if line[0] != "#" and len(line.strip()) > 0:
-			param, value  = line.strip().split('|')
-			if param in PHASH:
-				PHASH[param] += value
-			else:
-			 	PHASH[param] = value
-        FR.close()
-	return
-
-
-def LoadDivInfo(configfile, DHASH, pId):
-
-        FR = open(configfile, "r")
-        lines = FR.readlines()
-        for line in lines:
-                if line[0] != "#" and len(line.strip()) > 0:
-                        pageid, divid, field, value  = line.strip().split('|')
-                        if pageid == pId:
-				if divid in DHASH:
-                                	DHASH[divid] += (", \"%s\":\"%s\"" % (field, value))
-                       	 	else:
-                              		DHASH[divid] = ("\"%s\":\"%s\"" % ("id", divid))
-					DHASH[divid] += (", \"%s\":\"%s\"" % (field, value))
-        FR.close()
-        return
-
-
-def LoadGridInfo(configfile, DHASH, pId):
-
-        FR = open(configfile, "r")
-        lines = FR.readlines()
-        for line in lines:
-                if line[0] != "#" and len(line.strip()) > 0:
-                        pageid, row, col, field, value  = line.strip().split('|')
-                        cellid = str(row) + '_' + str(col)
-			if pageid == pId:
-                                if cellid in DHASH:
-                                        DHASH[cellid] += (", \"%s\":\"%s\"" % (field, value))
-                                else:
-                                        DHASH[cellid] = ("\"%s\":\"%s\"" % ("id", cellid))
-					DHASH[cellid] += (", \"%s\":\"%s\"" % ("row", row))
-					DHASH[cellid] += (", \"%s\":\"%s\"" % ("col", col))
-                                        DHASH[cellid] += (", \"%s\":\"%s\"" % (field, value))
-        FR.close()
-        return
-
-
-
-
-#~~~~~~~~~~~~~~~~~~~~~
-def  GetGlobalSections(PHASH):
-
-	groups = PHASH['GSECTIONS'].split(';')
-	tuples = ''
-        for group in groups:
-		sections = re.split(r'[:,]', group)
-		label, secid, action, access = sections[1].split('^')
-		tuples += '{"label":"'+label+'" , "id":"'+secid+'" , "action":"' + action + '"}';
-		for i in range(2, len(sections)):
-			label, secid, action, access = sections[i].split('^')
-			tuples += ',{"label":"'+label+'" , "id":"'+secid+'" , "action":"' + action + '"}';
-	return tuples;
-
-
-#~~~~~~~~~~~~~~~~~~~~~
-def  GetModuleSections(PHASH):
-
-        groups = PHASH['SECTIONS'].split(';')
-        tuples = ''
-        for group in groups:
-                sections = re.split(r'[:,]', group)
-                label, secid, action, access = sections[1].split('^')
-                tuples += '{"label":"'+label+'" , "id":"'+secid+'" , "action":"' + action + '"}';
-                for i in range(2, len(sections)):
-                        label, secid, action, access = sections[i].split('^')
-                        tuples += ',{"label":"'+label+'" , "id":"'+secid+'" , "action":"' + action + '"}';
-        return tuples;
-
-
-
-def MakeSessionId():
-
-	m = hashlib.md5()
-	m.update(str(time.time()))
-	m.update(str(os.urandom(64)))
-
-	myStr = string.replace(base64.encodestring(m.digest())[:-3], '/', '$')
-	return ''.join(e for e in myStr if e.isalnum())
 

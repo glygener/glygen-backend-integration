@@ -30,7 +30,37 @@
 		,"up_core":"http://purl.uniprot.org/core"
 		,"uniprot":"http://purl.uniprot.org/uniprot"
 	}
-	,"edges":{
+	,"xref":{
+                "xref_reactome": {"dbname":"Reactome", "lblflag":True},
+                "xref_hgnc":{"dbname":"HGNC", "lblflag":True},
+                "xref_mgi":{"dbname":"MGI", "lblflag":True},
+                "xref_kegg":{"dbname":"KEGG", "lblflag":False},
+                "xref_bgee":{"dbname":"Bgee", "lblflag":True},
+                "xref_biomuta":{"dbname":"BioMuta", "lblflag":True},
+                "xref_brenda":{"dbname":"BRENDA", "lblflag":True},
+                "xref_cazy":{"dbname":"CAZy", "lblflag":True},
+                "xref_cdd":{"dbname":"CDD", "lblflag":True},
+                "xref_chembl":{"dbname":"ChEMBL", "lblflag":True},
+                "xref_dbsnp":{"dbname":"dbSNP", "lblflag":True},
+                "xref_ensembl":{"dbname":"ENSEMBL", "lblflag":True},
+                "xref_enzyme":{"dbname":"ENZYME", "lblflag":True},
+                "xref_genecards":{"dbname":"GeneCards", "lblflag":True},
+                "xref_geneid":{"dbname":"GeneID", "lblflag":True},
+                "xref_interpro":{"dbname":"InterPro", "lblflag":True},
+                "xref_mim":{"dbname":"MIM", "lblflag":True},
+                "xref_nextprot":{"dbname":"neXtProt", "lblflag":True},
+                "xref_oma":{"dbname":"OMA", "lblflag":True},
+                "xref_orthodb":{"dbname":"OrthoDB", "lblflag":True},
+                "xref_panther":{"dbname":"PANTHER", "lblflag":True},
+                "xref_pdb":{"dbname":"PDB", "lblflag":True},
+                "xref_pfam":{"dbname":"Pfam", "lblflag":True},
+                "xref_pro":{"dbname":"PRO", "lblflag":True},
+                "xref_refseq":{"dbname":"RefSeq", "lblflag":True},
+                "xref_unicarbkb":{"dbname":"UniCarbKB", "lblflag":True}
+        }
+
+        
+        ,"edges":{
 		"edges_x":[ 
 			"catalyzed_by"
 			,"degraded_by"

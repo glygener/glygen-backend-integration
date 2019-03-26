@@ -1,0 +1,13 @@
+{
+    "human":{
+        "glycosylation_sites_unicarbkb_glytoucan":[]
+        ,"glycosylation_sites_uniprotkb":[]
+        ,"glycosylation_sites_pdb":[]
+    }
+    ,"mouse":{
+        "glycosylation_sites_unicarbkb_glytoucan":[]
+        ,"glycosylation_sites_uniprotkb":[]
+        ,"glycosylation_sites_pdb":[]
+    }
+}
+

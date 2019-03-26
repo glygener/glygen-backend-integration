@@ -1,0 +1,3 @@
+rapper: Parsing URI file:///data/projects/glygen/downloads/glycan/rdf/glycan.rdf with parser rdfxml
+rapper: Serializing with serializer ntriples
+rapper: Parsing returned 2633 triples

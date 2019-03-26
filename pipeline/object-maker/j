@@ -1,0 +1,243 @@
+>>> Q6NTE8-1
+[
+    {
+        "trend": "Down", 
+        "disease": {
+            "doid": "10283", 
+            "url": "http://disease-ontology.org/term/DOID:10283", 
+            "icd10": "", 
+            "name": "DOID:10283 / Prostate cancer [PCa]"
+        }, 
+        "significant": "Yes", 
+        "evidence": [
+            {
+                "url": "https://hive.biochemistry.gwu.edu/bioxpress/transcriptview/Q6NTE8", 
+                "id": "Q6NTE8", 
+                "database": "BioXpress"
+            }
+        ]
+    }, 
+    {
+        "trend": "Down", 
+        "disease": {
+            "doid": "3910", 
+            "url": "http://disease-ontology.org/term/DOID:3910", 
+            "icd10": "", 
+            "name": "DOID:3910 / Lung adenocarcinoma"
+        }, 
+        "significant": "No", 
+        "evidence": [
+            {
+                "url": "https://hive.biochemistry.gwu.edu/bioxpress/transcriptview/Q6NTE8", 
+                "id": "Q6NTE8", 
+                "database": "BioXpress"
+            }
+        ]
+    }, 
+    {
+        "trend": "Down", 
+        "disease": {
+            "doid": "3907", 
+            "url": "http://disease-ontology.org/term/DOID:3907", 
+            "icd10": "", 
+            "name": "DOID:3907 / Lung squamous cell carcinoma"
+        }, 
+        "significant": "Yes", 
+        "evidence": [
+            {
+                "url": "https://hive.biochemistry.gwu.edu/bioxpress/transcriptview/Q6NTE8", 
+                "id": "Q6NTE8", 
+                "database": "BioXpress"
+            }
+        ]
+    }, 
+    {
+        "trend": "Down", 
+        "disease": {
+            "doid": "3571", 
+            "url": "http://disease-ontology.org/term/DOID:3571", 
+            "icd10": "", 
+            "name": "DOID:3571 / Liver cancer [Livca]"
+        }, 
+        "significant": "No", 
+        "evidence": [
+            {
+                "url": "https://hive.biochemistry.gwu.edu/bioxpress/transcriptview/Q6NTE8", 
+                "id": "Q6NTE8", 
+                "database": "BioXpress"
+            }
+        ]
+    }, 
+    {
+        "trend": "Up", 
+        "disease": {
+            "doid": "1781", 
+            "url": "http://disease-ontology.org/term/DOID:1781", 
+            "icd10": "", 
+            "name": "DOID:1781 / Thyroid cancer [Thyca]"
+        }, 
+        "significant": "Yes", 
+        "evidence": [
+            {
+                "url": "https://hive.biochemistry.gwu.edu/bioxpress/transcriptview/Q6NTE8", 
+                "id": "Q6NTE8", 
+                "database": "BioXpress"
+            }
+        ]
+    }, 
+    {
+        "trend": "Down", 
+        "disease": {
+            "doid": "5041", 
+            "url": "http://disease-ontology.org/term/DOID:5041", 
+            "icd10": "", 
+            "name": "DOID:5041 / Esophageal cancer [EC]"
+        }, 
+        "significant": "No", 
+        "evidence": [
+            {
+                "url": "https://hive.biochemistry.gwu.edu/bioxpress/transcriptview/Q6NTE8", 
+                "id": "Q6NTE8", 
+                "database": "BioXpress"
+            }
+        ]
+    }, 
+    {
+        "trend": "Down", 
+        "disease": {
+            "doid": "11054", 
+            "url": "http://disease-ontology.org/term/DOID:11054", 
+            "icd10": "", 
+            "name": "DOID:11054 / Urinary bladder cancer [UBC]"
+        }, 
+        "significant": "Yes", 
+        "evidence": [
+            {
+                "url": "https://hive.biochemistry.gwu.edu/bioxpress/transcriptview/Q6NTE8", 
+                "id": "Q6NTE8", 
+                "database": "BioXpress"
+            }
+        ]
+    }
+]
+[
+    {
+        "trend": "Down", 
+        "disease": {
+            "doid": "10283", 
+            "url": "http://disease-ontology.org/term/DOID:10283", 
+            "icd10": "C61", 
+            "name": "DOID:10283 / Prostate cancer [PCa]"
+        }, 
+        "significant": "Yes", 
+        "evidence": [
+            {
+                "url": "https://hive.biochemistry.gwu.edu/bioxpress/transcriptview/Q6NTE8", 
+                "id": "Q6NTE8", 
+                "database": "BioXpress"
+            }
+        ]
+    }, 
+    {
+        "trend": "Down", 
+        "disease": {
+            "doid": "3910", 
+            "url": "http://disease-ontology.org/term/DOID:3910", 
+            "icd10": "", 
+            "name": "DOID:3910 / Lung adenocarcinoma"
+        }, 
+        "significant": "No", 
+        "evidence": [
+            {
+                "url": "https://hive.biochemistry.gwu.edu/bioxpress/transcriptview/Q6NTE8", 
+                "id": "Q6NTE8", 
+                "database": "BioXpress"
+            }
+        ]
+    }, 
+    {
+        "trend": "Down", 
+        "disease": {
+            "doid": "3907", 
+            "url": "http://disease-ontology.org/term/DOID:3907", 
+            "icd10": "", 
+            "name": "DOID:3907 / Lung squamous cell carcinoma"
+        }, 
+        "significant": "Yes", 
+        "evidence": [
+            {
+                "url": "https://hive.biochemistry.gwu.edu/bioxpress/transcriptview/Q6NTE8", 
+                "id": "Q6NTE8", 
+                "database": "BioXpress"
+            }
+        ]
+    }, 
+    {
+        "trend": "Down", 
+        "disease": {
+            "doid": "3571", 
+            "url": "http://disease-ontology.org/term/DOID:3571", 
+            "icd10": "C22.0", 
+            "name": "DOID:3571 / Liver cancer [Livca]"
+        }, 
+        "significant": "No", 
+        "evidence": [
+            {
+                "url": "https://hive.biochemistry.gwu.edu/bioxpress/transcriptview/Q6NTE8", 
+                "id": "Q6NTE8", 
+                "database": "BioXpress"
+            }
+        ]
+    }, 
+    {
+        "trend": "Up", 
+        "disease": {
+            "doid": "1781", 
+            "url": "http://disease-ontology.org/term/DOID:1781", 
+            "icd10": "C73", 
+            "name": "DOID:1781 / Thyroid cancer [Thyca]"
+        }, 
+        "significant": "Yes", 
+        "evidence": [
+            {
+                "url": "https://hive.biochemistry.gwu.edu/bioxpress/transcriptview/Q6NTE8", 
+                "id": "Q6NTE8", 
+                "database": "BioXpress"
+            }
+        ]
+    }, 
+    {
+        "trend": "Down", 
+        "disease": {
+            "doid": "5041", 
+            "url": "http://disease-ontology.org/term/DOID:5041", 
+            "icd10": "C15.3", 
+            "name": "DOID:5041 / Esophageal cancer [EC]"
+        }, 
+        "significant": "No", 
+        "evidence": [
+            {
+                "url": "https://hive.biochemistry.gwu.edu/bioxpress/transcriptview/Q6NTE8", 
+                "id": "Q6NTE8", 
+                "database": "BioXpress"
+            }
+        ]
+    }, 
+    {
+        "trend": "Down", 
+        "disease": {
+            "doid": "11054", 
+            "url": "http://disease-ontology.org/term/DOID:11054", 
+            "icd10": "C67", 
+            "name": "DOID:11054 / Urinary bladder cancer [UBC]"
+        }, 
+        "significant": "Yes", 
+        "evidence": [
+            {
+                "url": "https://hive.biochemistry.gwu.edu/bioxpress/transcriptview/Q6NTE8", 
+                "id": "Q6NTE8", 
+                "database": "BioXpress"
+            }
+        ]
+    }
+]

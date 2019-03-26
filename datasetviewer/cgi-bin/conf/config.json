@@ -1,8 +1,11 @@
 {
-	"server":"prd"
+	"server":"dev"
 	,"module":"datasetviewer"
 	,"title":"Dataset Collection"
-	,"desc":""
+	,"project":"glygen"
+        ,"release":"x"
+        ,"datarelease":"1.0.5"
+        ,"desc":""
 	,"sections":[
 		{"id":"about", "label":"About", "access":"000"}
 		,{"id":"browse", "label":"Browse Objects", "access":"000"}
@@ -19,7 +22,7 @@
 	,"firstgpageid":"resources"
 	,"firstaction":"BrowseTypeTreeStep1"
 	,"queryform":{
-        	"nosearch":true
+        	"nosearch":false
 		,"boxlist":[[
                 {
                         "name":"searchvalue1", "class":"valuetxtboxcls", "placeholder":"", "value":""
@@ -43,15 +46,25 @@
 	}
 	,"prd":{
                 "dbinfo":{
-                        "dbhost":"127.0.0.1"
-                        ,"dbname":"glygen"
-                        ,"dbuserid":"dataservieweradmin"
-                        ,"dbpassword":"dataserviewerpass"
+                        "mongodbname":"glydb"
+                        ,"mongodbuser":"glydbadmin"
+                        ,"mongodbpassword":"glydbpass"
+                        ,"sessionlife":3600
+                        ,"bcoprefix":"GLYDS"
+                        ,"collections":{
+                            "bco":"c_bco"
+                            ,"counters":"c_counters"
+                            ,"users":"c_users"
+                            ,"glycan":"c_glycan"
+                            ,"protein":"c_protein"
+                            ,"searchinit":"c_searchinit"
+                            ,"metadata":"c_metadata"
+                        }
                 }
                 ,"rootinfo":{
                         "baseurl":""
                         ,"ghtmlroot":""
-                        ,"htmlroot":"http://data.glygen.org"
+                        ,"htmlroot":"https://data.glygen.org"
                         ,"cgiroot":"/cgi-bin"
                         ,"pagebase":""
                         ,"downloadbase":""
@@ -59,23 +72,30 @@
                 ,"pathinfo":{
                         "htmlpath":"/var/www/html/datasetviewer/"
                         ,"cgipath":"/var/www/cgi-bin/datasetviewer/"
-                        ,"apierrorlogpath":"/data/projects/glygen/apierrorlog/"
-                        ,"apicachepath":"/data/projects/glygen/apicache/"
-                        ,"jsondbpath":"/data/projects/glygen/jsondb/"
-                        ,"debuglogfile":"/data/projects/glygen/apierrorlog/debug.txt"
+                        ,"jsondbpath":"/data/projects/glygen/wwwdata/jsondb/"
                 }
         }
 	,"beta":{
                 "dbinfo":{
-                        "dbhost":"127.0.0.1"
-                        ,"dbname":"glygen_beta"
-                        ,"dbuserid":"dataservieweradmin"
-                        ,"dbpassword":"dataserviewerpass"
+                        "mongodbname":"glydb"
+                        ,"mongodbuser":"glydbadmin"
+                        ,"mongodbpassword":"glydbpass"
+                        ,"sessionlife":3600
+                        ,"bcoprefix":"GLYDS"
+                        ,"collections":{
+                            "bco":"c_bco"
+                            ,"counters":"c_counters"
+                            ,"users":"c_users"
+                            ,"glycan":"c_glycan"
+                            ,"protein":"c_protein"
+                            ,"searchinit":"c_searchinit"
+                            ,"metadata":"c_metadata"
+                        }
                 }
                 ,"rootinfo":{
 			"baseurl":""
                 	,"ghtmlroot":""
-                	,"htmlroot":"http://beta.data.glygen.org"
+                	,"htmlroot":"https://beta.data.glygen.org"
                 	,"cgiroot":"/cgi-bin"
                 	,"pagebase":""
                 	,"downloadbase":""
@@ -83,22 +103,30 @@
 		,"pathinfo":{
                         "htmlpath":"/var/www/html/beta/datasetviewer/"
                         ,"cgipath":"/var/www/cgi-bin/beta/datasetviewer/"
-                	,"apierrorlogpath":"/data/projects/glygen-beta/apierrorlog/"
-			,"jsondbpath":"/data/projects/glygen-beta/jsondb/"
-			,"debuglogfile":"/data/projects/glygen-beta/apierrorlog/debug.txt"
-		}
+			,"jsondbpath":"/data/projects/glygen-beta/wwwdata/jsondb/"
+                }
 	}
 	,"tst":{
                 "dbinfo":{
-                        "dbhost":"127.0.0.1"
-                        ,"dbname":"glygen"
-                        ,"dbuserid":"dataservieweradmin"
-                        ,"dbpassword":"dataserviewerpass"
+                        "mongodbname":"glydb"
+                        ,"mongodbuser":"glydbadmin"
+                        ,"mongodbpassword":"glydbpass"
+                        ,"bcoprefix":"GLYDS"
+                        ,"sessionlife":3600
+                        ,"collections":{
+                            "bco":"c_bco"
+                            ,"counters":"c_counters"
+                            ,"users":"c_users"
+                            ,"glycan":"c_glycan"
+                            ,"protein":"c_protein"
+                            ,"searchinit":"c_searchinit"
+                            ,"metadata":"c_metadata"
+                        }
                 }
                 ,"rootinfo":{
                         "baseurl":""
                         ,"ghtmlroot":""
-                        ,"htmlroot":"http://tst.data.glygen.org"
+                        ,"htmlroot":"https://data.tst.glygen.org"
                         ,"cgiroot":"/cgi-bin"
                         ,"pagebase":""
                         ,"downloadbase":""
@@ -106,23 +134,30 @@
                 ,"pathinfo":{
                         "htmlpath":"/var/www/html/datasetviewer/"
                         ,"cgipath":"/var/www/cgi-bin/datasetviewer/"
-                        ,"apierrorlogpath":"/data/projects/glygen/apierrorlog/"
-                        ,"apicachepath":"/data/projects/glygen/apicache/"
-                        ,"jsondbpath":"/data/projects/glygen/jsondb/"
-                        ,"debuglogfile":"/data/projects/glygen/apierrorlog/debug.txt"
+                        ,"jsondbpath":"/data/projects/glygen/wwwdata/jsondb/"
                 }
         }
 	,"dev":{
                 "dbinfo":{
-                        "dbhost":"127.0.0.1"
-                        ,"dbname":"glygen"
-                        ,"dbuserid":"dataservieweradmin"
-                        ,"dbpassword":"dataserviewerpass"
+                        "mongodbname":"glydb"
+                        ,"mongodbuser":"glydbadmin"
+                        ,"mongodbpassword":"glydbpass"
+                        ,"bcoprefix":"GLYDS"
+                        ,"sessionlife":3600
+                        ,"collections":{
+                            "bco":"c_bco"
+                            ,"counters":"c_counters"
+                            ,"users":"c_users"
+                            ,"glycan":"c_glycan"
+                            ,"protein":"c_protein"
+                            ,"searchinit":"c_searchinit"
+                            ,"metadata":"c_metadata"
+                        }
                 }
                 ,"rootinfo":{
                         "baseurl":""
                         ,"ghtmlroot":""
-                        ,"htmlroot":"http://dev.data.glygen.org"
+                        ,"htmlroot":"https://data.dev.glygen.org"
                         ,"cgiroot":"/cgi-bin"
                         ,"pagebase":""
                         ,"downloadbase":""
@@ -130,10 +165,7 @@
                 ,"pathinfo":{
                         "htmlpath":"/var/www/html/datasetviewer/"
                         ,"cgipath":"/var/www/cgi-bin/datasetviewer/"
-                        ,"apierrorlogpath":"/data/projects/glygen/apierrorlog/"
-                        ,"apicachepath":"/data/projects/glygen/apicache/"
-                        ,"jsondbpath":"/data/projects/glygen/jsondb/"
-                        ,"debuglogfile":"/data/projects/glygen/apierrorlog/debug.txt"
+                        ,"jsondbpath":"/data/projects/glygen/wwwdata/jsondb/"
                 }
         }
 }

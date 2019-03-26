@@ -7,6 +7,7 @@ from bson import json_util, ObjectId
 import json
 import pymongo
 from pymongo import MongoClient
+import traceback
 
 
 __version__="1.0"
@@ -39,35 +40,41 @@ def main():
                 parser.print_help()
                 sys.exit(0)
 
-
-
         config_obj = json.loads(open("conf/config.json", "r").read())
         path_obj  =  config_obj[config_obj["server"]]["pathinfo"]
         root_obj =  config_obj[config_obj["server"]]["rootinfo"]
         db_obj = config_obj[config_obj["server"]]["dbinfo"]
-        
-	client = MongoClient('mongodb://localhost:27017')
-	db = client[db_obj["dbname"]]
-        coll = "c_metadata"
-        
-        obj = json.loads(options.injson)
-        obj_id = int(obj["objid"])
+       
+        out_json = {}
+	try:
+		client = MongoClient('mongodb://localhost:27017')
+		db = client[db_obj["dbname"]]
+        	coll = "c_metadata"
+        	obj = json.loads(options.injson)
+        	obj_id = int(obj["objid"])
+        	obj.pop("objid")
+		if obj == {}:
+			out_json = {"status":-1}
+			out_json["errormsg"] = "Cannot save empty object"
+			print json.dumps(out_json, indent=4)
+			sys.exit()
+		elif obj_id == 0:
+            		obj["_id"]  = get_next_sequence_value(db, "metadataid")
+            		result = db[coll].insert_one(obj)
+            		obj_id = obj["_id"]
+        	else:
+            		result = db[coll].replace_one({"_id":obj_id}, obj, upsert=False)
 
-        if obj_id == 0:
-            obj.pop("objid")
-            obj["_id"]  = get_next_sequence_value(db, "metadataid")
-            result = db[coll].insert_one(obj)
-            obj_id = obj["_id"]
-        else:
-            result = db[coll].update_one({"_id":obj_id}, {'$set': obj}, upsert=False)
-   
-        query_obj = {"_id":obj_id}
-        #doc = db[coll].find_one(query_obj)
-        #doc.pop("_id")
-        #doc.pop("object_id")
+		query_obj = {"_id":obj_id}
+            	out_json = db[coll].find_one(query_obj)
+		out_json["status"] = 1
+                out_json["errormsg"] = ""
+	except Exception, e:
+		out_json = {"status":-1}
+                out_json["errormsg"] =  traceback.format_exc().split("\n")[-2].split(":")[0]
+		#print traceback.format_exc()
 
-        doc = {"objid":obj_id}
-        print json.dumps(doc, indent=4)
+        print json.dumps(out_json, indent=4)
 
 
 if __name__ == '__main__':

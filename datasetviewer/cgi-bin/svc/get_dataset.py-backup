@@ -1,0 +1,210 @@
+import os,sys
+import string
+import commands
+import csv
+import traceback
+
+from Bio import SeqIO
+from Bio.Seq import Seq
+
+
+from optparse import OptionParser
+import glob
+from bson import json_util, ObjectId
+import json
+import util
+
+
+__version__="1.0"
+__status__ = "Dev"
+
+
+
+
+###############################
+def main():
+
+    usage = "\n%prog  [options]"
+    parser = OptionParser(usage,version="%prog version___")
+    parser.add_option("-o","--objid",action="store",dest="objid",help="Object ID")
+    parser.add_option("-v","--objver",action="store",dest="objver",help="Object Version")
+
+
+    (options,args) = parser.parse_args()
+    for key in ([options.objid]):
+        if not (key):
+            parser.print_help()
+            sys.exit(0)
+
+    try:
+        config_json = json.loads(open("conf/config.json", "r").read())
+        if os.path.exists("conf/config.custom.json"):
+            custom_config_json = json.loads(open("conf/config.custom.json", "r").read())
+            for k_one in custom_config_json:
+                for k_two in custom_config_json[k_one]:
+                    if k_one in config_json:
+                        if k_two in config_json[k_one]:
+                            config_json[k_one][k_two] = custom_config_json[k_one][k_two]
+        log_dir = config_json["pathinfo"]["htmlpath"] + "/log/"
+    except Exception, e:
+        out_json = {"taskstatus":0, "errormsg":"Loading config failed!"}
+
+    try:
+        client = MongoClient('mongodb://localhost:27017',
+            username=config_json["dbinfo"]["mongodbuser"],
+            password=config_json["dbinfo"]["mongodbpassword"],
+            authSource=config_json["dbinfo"]["mongodbname"],
+            authMechanism='SCRAM-SHA-1',
+            serverSelectionTimeoutMS=10000
+        )
+        client.server_info()
+        mongo_dbh = client[config_json["dbinfo"]["mongodbname"]]
+        mongo_cl_bco = mongo_dbh[config_json["dbinfo"]["collections"]["bco"]]
+        mongo_cl_counters = mongo_dbh[config_json["dbinfo"]["collections"]["counters"]]
+        mongo_cl_users = mongo_dbh[config_json["dbinfo"]["collections"]["users"]]
+
+
+    except pymongo.errors.ServerSelectionTimeoutError as err:
+        out_json = {"taskstatus":0, "errormsg":"Connection to mongodb failed!"}
+    except pymongo.errors.OperationFailure as err:
+        out_json = {"taskstatus":0, "errormsg":"MongoDB auth failed!"}
+
+    print "Content-Type: application/json"
+    print          
+    print json.dumps(out_json, indent=4)
+
+    sys.exit()
+
+
+
+
+
+        config_obj = json.loads(open("conf/config.json", "r").read())
+        path_obj  =  config_obj[config_obj["server"]]["pathinfo"]
+        root_obj =  config_obj[config_obj["server"]]["rootinfo"]
+        db_obj = config_obj[config_obj["server"]]["dbinfo"]
+
+        out_json = {}
+        dbh, error_obj = util.connect_to_mongodb(db_obj) #connect to mongodb
+        if error_obj != {}:
+            out_json = error_obj
+        else:
+            #mongo_cl_bco = mongo_dbh[db_obj["collections"]["bco"]]
+            mongo_cl_bco = dbh[db_obj["collections"]["metadata"]]
+            mongo_cl_counters = dbh[db_obj["collections"]["counters"]]
+            mongo_cl_users = dbh[db_obj["collections"]["users"]]
+            obj_id = int(options.objid.replace(db_obj["bcoprefix"], ""))
+            obj_ver = options.objver
+            try:
+                query_obj = {"_id":obj_id}
+                doc = mongo_cl_bco.find_one(query_obj)
+                out_json = {"status":1, "errormsg":"", "info":{}}
+                out_json["info"]["title"] = doc["title"]
+                out_json["info"]["description"] = doc["description"]
+                out_json["info"]["filename"] = doc["filename"]
+                out_json["info"]["filetype"] = doc["filetype"]
+
+                out_json["info"]["objid"] = options.objid
+                out_json["info"]["filestatus"] = False               
+                out_json["txtbuffer"] = ""
+
+                cmd = "cat " + path_obj["htmlpath"] + "/ln2wwwdata/reviewed/release-notes.txt"
+                release_info = commands.getoutput(cmd).strip()
+                out_json["versions"] = [release_info]
+                file_list = glob.glob(path_obj["htmlpath"] + "/ln2wwwdata/reviewed/v-*/" + doc["filename"])
+                for f in file_list:
+                    ver = f.split("/")[-2]
+                    rel_file = path_obj["htmlpath"] + "/ln2wwwdata/reviewed/"+ver+"/release-notes.txt"
+                    if os.path.exists(rel_file):
+                        cmd = "cat " + rel_file
+                        release_info = commands.getoutput(cmd).strip()
+                        out_json["versions"].append(release_info)
+                out_json["selectedversion"] = obj_ver
+                if obj_ver == None:
+                    out_json["selectedversion"] = out_json["versions"][0].split(" ")[0]
+
+                data_file = path_obj["htmlpath"] + "/ln2wwwdata/reviewed/"
+                if obj_ver not in [None, out_json["versions"][0].split(" ")[0]]:
+                    data_file += obj_ver + "/"
+                data_file += doc["filename"]
+       
+                if os.path.exists(data_file):
+                    out_json["info"]["filestatus"] = True
+
+
+                species_short = "human" if doc["species"] ==  "Homo sapiens" else "mouse"
+                if doc["filetype"] == "csv":
+                    out_json["dataframe"] = []
+                    with open(data_file, 'r') as FR:
+                        csvGrid = csv.reader(FR, delimiter=',', quotechar='"')
+                        rowCount = 0
+                        for row in csvGrid:
+                            rowCount += 1
+                            out_json["dataframe"].append(row)
+                            if rowCount == 1:
+                                tmpList = []
+                                for j in xrange(0, len(row)):
+                                    tmpList.append("string")
+                                out_json["dataframe"].append(tmpList)
+                            if rowCount == 85:
+                                break
+                elif doc["filetype"] == "fasta":
+                    out_json["seqobjects"] = []
+                    seqCount = 0
+                    in_file = path_obj["htmlpath"] + "/ln2wwwdata/reviewed/" + doc["filename"]
+                    for record in SeqIO.parse(in_file, "fasta"):
+                        seqCount += 1
+                        seqId = record.id
+                        seqDesc = record.description
+                        seqBody = str(record.seq.upper())
+                        out_json["seqobjects"].append({"seqid":seqId, "seqdesc":seqDesc, "seqbody":seqBody})
+                        if seqCount == 10:
+                            break
+                elif doc["filetype"] in ["rdf"]:
+                    in_file = path_obj["htmlpath"] + "/ln2wwwdata/reviewed/" + doc["filename"]
+                    with open(in_file, 'r') as FR:
+                        lineCount = 0
+                        for line in FR:
+                            lineCount += 1
+                            out_json["txtbuffer"] += line
+                            if lineCount == 100:
+                                break
+                elif doc["filetype"] in ["gp", "gb", "nt"]:
+                    in_file = path_obj["htmlpath"] + "/ln2wwwdata/reviewed/" + doc["filename"]
+                    with open(in_file, 'r') as FR:
+                        lineCount = 0
+                        for line in FR:
+                            lineCount += 1
+                            out_json["txtbuffer"] += line
+                            if lineCount == 200:
+                                break
+                elif doc["filetype"] in ["png"]:
+                    file_list = glob.glob(path_obj["htmlpath"] + "/ln2wwwdata/glycanimages/*.png")
+                    for f in file_list[1000:1010]:
+                        recordId = f.split("/")[-1].split(".")[0]
+                        url = root_obj["htmlroot"] + "/ln2wwwdata/glycanimages/"  + f.split("/")[-1]
+                        out_json["txtbuffer"] +=  "%s <br>" % (recordId)
+                        out_json["txtbuffer"] += "<img src=\"%s\"><hr><br>" % (url)
+                elif doc["filetype"] in ["aln"]:
+                    file_list = glob.glob(path_obj["htmlpath"] + "/ln2wwwdata/aln/"+species_short+"/*.aln")
+                    for f in file_list[0:10]:
+                        recordId = f.split("/")[-1].split(".")[0]
+                        out_json["txtbuffer"] +=  "%s" % (recordId)
+                        with open(f, 'r') as FR:
+                            for line in FR:
+                                out_json["txtbuffer"] += line
+                            out_json["txtbuffer"] += "\n\n"
+                else:
+                    out_json["txtbuffer"] +=  "Please implement service for " + doc["filetype"] + " preview!"
+            except Exception, e:
+                out_json = {"taskstatus":0, "errormsg":"Exceptipn error!"}
+                #out_json["errormsg"] =  traceback.format_exc().split("\n")[-2].split(":")[0]
+                                            
+
+        print json.dumps(out_json, indent=4)
+                        
+
+
+if __name__ == '__main__':
+	main()
+

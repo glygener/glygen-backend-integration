@@ -1,0 +1,65 @@
+         [
+            {
+                "mediatype": "csv",
+                "uri": {
+                    "access_time": "2019-01-07T17:43:17-0500",
+                    "sha1_chksum": "",
+                    "uri": "http://data.glygen.org/datasets/reviewed/human_protein_idmapping.csv",
+                    "filename": "human_protein_idmapping.csv"
+                }
+            },
+            {
+                "mediatype": "txt",
+                "uri": {
+                    "access_time": "2019-01-07T17:43:17-0500",
+                    "sha1_chksum": "",
+                    "uri": "http://data.glygen.org/datasets/reviewed/human_protein_idmapping.stat.txt",
+                    "filename": "human_protein_idmapping.stat.txt"
+                }
+            }
+            
+        ]
+_detail.html?glytoucan_ac=G00030MO
+No records found for Glycans Containing This Motif section
+image.png
+
+2) http://dev.glygen.org/glycan_detail.html?glytoucan_ac=G17689DH 
+No species evidence link found
+
+image.png
+
+3) http://dev.glygen.org/protein_detail.html?uniprot_canonical_ac=P14210-1
+Cannot click on BioMuta evidence
+
+image.png
+
+4) http://dev.glygen.org/protein_detail.html?uniprot_canonical_ac=P14210-1 
+Weird smiley in the disease section
+
+image.png
+
+5) http://dev.glygen.org/protein_detail.html?uniprot_canonical_ac=P14210-1 
+
+Do not use / in the url for UniProt accession page (http://www.uniprot.org/uniprot/P14210-1/)
+Error on UniProt page due to / 
+image.png
+
+6) http://dev.glygen.org/protein_detail.html?uniprot_canonical_ac=P14210-1 
+The C9JDP4 is one of the isoforms for P14210. However, it has a separate entry page in UniProt. Our link https://www.uniprot.org/uniprot/P14210#C9JDP4-1 does not show the C9JDP4 as it will for P14210-2. The correct link is https://www.uniprot.org/uniprot/C9JDP4. Similarly for other isoforms.
+image.png
+7) http://glygen.org/protein_list.html?id=45fef96d93adaff21b4e9942c2906660
+For the entries that do not have UniProt recommended names can we show the UniProt Submitted names? See Q8BML3 
+
+image.png
+
+8) When Mus Musculus is searched in advanced search I get list for both human and for mouse.
+No question for search seen on top.
+
+image.png
+
+9) http://dev.glygen.org/glycoprotein_search.html#advanced_search 
+No search working on Glycoprotein advanced search - produces error
+image.png
+10) Slider problem - Statistics shows 3302 glycans but advanced search shows 3300 glycans
+
+

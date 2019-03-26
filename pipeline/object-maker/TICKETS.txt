@@ -1,0 +1,14 @@
+0|Story GLYG-514 Create a WS for statistics
+0|Task GLYG-504 Implementation of home page init WS
+0|Task GLYG-505 Sorting with Refseq name issue on protein page on prd server
+0|Story GLYG-508 Develop a strategy for error repsonse
+0|Story GLYG-510 For the next update work on API to remove empty lists or objects.
+
+0|Task GLYG-511 Generalize URL
+0|Story GLYG-495 Linking of Glycoprotein to UniCarbKB protein page instead of glycan page
+1|Task GLYG-493 crossref for D6RA91-1
+0|Task GLYG-492 complex query excuetion time
+0|Story GLYG-461 Protein detail mutation evidence link must be 
+
+0|Story GLYG-507 Create separate Public GitHub repo's for API and DS viewer.
+0|Story GLYG-509 Take a look and try to use Nathan's library for RDF

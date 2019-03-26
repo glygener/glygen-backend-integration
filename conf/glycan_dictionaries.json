@@ -1,0 +1,27 @@
+{
+    "taxid2name":{
+        "fileglob":["taxid2name.csv"],
+        "indexlist":[0,1]
+    }
+    ,"xrefdb2url":{
+        "fileglob":["database_url_templates.csv"],
+        "indexlist":[0,1]
+    }
+    ,"subtypetags":{
+        "fileglob":["glycan_subtype_tags.csv"],
+        "indexlist":[0,1]
+    }
+    ,"canon2hgncid":{
+        "fileglob":["human_protein_xref_hgnc.csv","mouse_protein_xref_mgi.csv"],
+        "indexlist":[0,1]
+    }
+    ,"canon2hgncname":{
+        "fileglob":["human_protein_xref_hgnc.csv", "mouse_protein_xref_mgi.csv"],
+        "indexlist":[0,2]
+    }                    
+    ,"canon2recname":{
+        "fileglob":["*_protein_recnames.csv"],
+        "indexlist":[0,1]
+    }
+}
+

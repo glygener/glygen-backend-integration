@@ -1,198 +1,36 @@
 {
-    "provenance_domain": {
-        "extension_domain": {
-            "display_extension": {
-                "status": 1,
-                "minitable": {
-                    "content": [
-                        [
-                            "",
-                            "",
-                            ",..."
-                        ],
-                        [
-                            "",
-                            "",
-                            ",..."
-                        ]
-                    ],
-                    "headers": [
-                        "",
-                        "",
-                        ",..."
-                    ],
-                    "colwidth": [
-                        "40%",
-                        "20%"
-                    ]
-                },
-                "description": "",
-                "title": "",
-                "filetype": "",
-                "filename": "",
-                "iconfilename": "",
-                "readmefilename": "",
-                "categorytitle": "",
-                "species": "",
-                "categoryid": ""
-            }
-        },
-        "object_id": 1,
-        "type_id": 1,
-        "name": "",
-        "readmefilename": "",
-        "title": "",
-        "species": "",
-        "categorytitle": "",
-        "categoryid": "",
-        "version": "",
-        "digital_signature": "",
-        "review": [
-            {
-                "status": "",
-                "comment": "",
-                "reviewer": {
-                    "type": "entity",
-                    "entity": {
-                        "name": "",
-                        "affiliation": "",
-                        "email": "",
-                        "contribution": ""
-                    }
-                }
-            }
-        ],
-        "derived_from": "",
-        "obsolete": "null",
-        "embargo": {
-            "start_time": "null",
-            "end_time": "null"
-        },
-        "created": "",
-        "modified": "",
-        "contributors": [
-            {
-                "reviewer": {
-                    "type": "entity",
-                    "entity": {
-                        "name": "",
-                        "affiliation": "",
-                        "email": "",
-                        "contribution": ""
-                    }
-                }
-            },
-            {
-                "reviewer": {
-                    "type": "entity",
-                    "entity": {
-                        "name": "",
-                        "affiliation": "",
-                        "email": "",
-                        "contribution": ""
-                    }
-                }
-            },
-            {
-                "reviewer": {
-                    "type": "entity",
-                    "entity": {
-                        "name": "",
-                        "affiliation": "",
-                        "email": "",
-                        "contribution": ""
-                    }
-                }
-            }
-        ],
-        "verification_status": "",
-        "license": {
-            "address": "",
-            "access_time": ""
-        }
-    },
-    "usability_domain": [
-        ""
-    ],
-    "description_domain": {
-        "description": "",
-        "keywords": [
-            {
-                "key": "",
-                "value": [
-                    ""
-                ]
-            }
-        ],
-        "xref": [
-            {
-                "source": "",
-                "db": "",
-                "id": "",
-                "access_time": ""
-            }
-        ],
-        "pipeline_steps": {
-            "tool": [
-                {
-                    "name": "",
-                    "description": "",
-                    "step_number": "",
-                    "version": "",
-                    "prerequisite": "",
-                    "input_list": [
-                        ""
-                    ],
-                    "output_list": [
-                        ""
-                    ]
-                }
+    "status": 0, 
+    "minitable": {
+        "content": [
+            [
+                "a1", 
+                "b1", 
+                "c1"
+            ], 
+            [
+                "a2", 
+                "b2", 
+                "c2"
             ]
-        }
-    },
-    "execution_domain": {
-        "script": "https://github.com/GW-HIVE/backendcode/tree/master/glygen/",
-        "script_type": "Text",
-        "pipeline_version": "1",
-        "platform": "null",
-        "driver": "python",
-        "env_parameters": {
-            "OS_type": "",
-            "memory": ""
-        },
-        "software_prerequisites": [
-            {
-                "name": "Python",
-                "version": "2.7.13"
-            }
+        ], 
+        "headers": [
+            "A", 
+            "B",
+            "C"
+        ], 
+        "colwidth": [
+            "40%", 
+            "20%"
         ]
-    },
-    "io_domain": {
-        "input_subdomain": [
-            {
-                "title": "",
-                "source/uri": "",
-                "mime-type": ""
-            }
-        ],
-        "output_subdomain": [
-            {
-                "title": "",
-                "source/uri": "",
-                "mime-type": ""
-            }
-        ],
-        "column_headers": [
-            {
-                "": ",..."
-            }
-        ],
-        "stats": [
-            {
-                "": ",..."
-            }
-        ]
-    }
+    }, 
+    "description": "",
+    "title": "",
+    "filetype": "", 
+    "filename": "",
+    "iconfilename": "", 
+    "readmefilename": "",
+    "categorytitle": "",
+    "species": "",
+    "categoryid":""
 }
-
 
