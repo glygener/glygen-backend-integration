@@ -1,0 +1,18 @@
+{
+    "human":{
+	"masterlist":[]
+        ,"info_uniprotkb":[]
+        ,"recnames":[]
+    },
+    "mouse":{
+        "masterlist":[]
+        ,"info_uniprotkb":[]
+        ,"recnames":[]
+    },
+    "rat":{
+        "masterlist":[]
+        ,"info_uniprotkb":[]
+        ,"recnames":[]
+    }
+}
+

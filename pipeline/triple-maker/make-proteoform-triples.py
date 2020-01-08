@@ -37,8 +37,12 @@ def main():
         config_json = json.loads(open("../../conf/config-1.1.json", "r").read())
         path_obj  =  config_json[config_json["server"]]["pathinfo"]
 
-        jsondb_file = path_obj["jsondbpath"] + "/proteindb.json"
-        protein_obj_list = json.loads(open(jsondb_file, "r").read())
+        protein_obj_list = {}
+        for in_file in glob.glob("generated/datasets/jsondb/proteindb/*.json"):
+            canon = in_file.split("/")[-1].split(".")[0]
+            obj = json.loads(open(in_file, "r").read())
+            protein_obj_list[canon] = obj
+
 
         counter = {}
         ns_map =  config_json["nsmap"]
@@ -75,10 +79,21 @@ def main():
         for protein_ac in glyset_i:
             for evid in glyset_i[protein_ac]:
                 gset = glyset_i[protein_ac][evid]
-                gset_string = "%s|%s" % (protein_ac, json.dumps(gset))
-                if gset_string not in gset2evid:
-                    gset2evid[gset_string] = []
-                gset2evid[gset_string].append(evid)
+                
+                ##Comment the next 4 lines if you want to create one site glycoproteins
+                #gset_string = "%s|%s" % (protein_ac, json.dumps(gset))
+                #if gset_string not in gset2evid:
+                #    gset2evid[gset_string] = []
+                #gset2evid[gset_string].append(evid)
+
+                ##Comment the next 4 lines if you want to create multiple site glycoproteins
+                for o in gset:
+                    gset_string = "%s|%s" % (protein_ac, json.dumps([o]))
+                    if gset_string not in gset2evid:
+                        gset2evid[gset_string] = []
+                    gset2evid[gset_string].append(evid)
+
+        
 
         gp_obj_list = []
         gpcounter_dict = {}
@@ -103,10 +118,10 @@ def main():
             gp_obj_list.append(gp_obj)
 
 
+
+
         seen_triple = {}
         glycanset2id = {}
-
-
         gpsite2locid = {}
         evid2evidenceid = {}
         for gp_obj in gp_obj_list:
@@ -122,7 +137,14 @@ def main():
             if triple not in seen_triple:
                 print triple
                 seen_triple[triple] = True
-            
+           
+            pro_url = "gp_id2pro-of-%s" % (gp_id)
+            triple = "<%s> <%s%s> <%s> ." % (gp_url, ns_map["gly"], "has_pro_entry", pro_url)
+            if triple not in seen_triple:
+                print triple
+                seen_triple[triple] = True
+
+
             for evid in gp_obj["evidlist"]:
                 if evid not in evid2evidenceid:
                     evid2evidenceid[evid] = get_counter(counter, "GLYCOPROTEIN_EVIDENCE")
@@ -144,7 +166,7 @@ def main():
                     print triple
                     seen_triple[triple] = True
                 
-                triple = "<%s> <%s%s> %s ." % (ev_url, ns_map["up"], "citation", cite_url)
+                triple = "<%s> <%s%s> <%s> ." % (ev_url, ns_map["up"], "citation", cite_url)
                 if triple not in seen_triple:
                     print triple
                     seen_triple[triple] = True

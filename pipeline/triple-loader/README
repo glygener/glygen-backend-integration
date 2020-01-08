@@ -1,0 +1,23 @@
+Loading uniprot graphs for each species
+=======================================
+1) Clear graphs for each species
+    >> clear-uniprot-graph.sh $species
+
+
+2) Make sure they are clear
+    >> count-uniprot-triples.sh $species
+
+
+3) Load each species graph
+    >> load-uniprot-graph.sh $species
+
+
+
+    
+Loading glygen graph
+======================
+
+1) clear-glygen-graph.sh
+
+2) load-glygen-graph.sh
+

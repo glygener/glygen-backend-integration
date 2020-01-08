@@ -15,6 +15,9 @@ import libgly
 
 
 
+##################
+def get_sort_key_value(obj):
+    return obj["date"]
 
 
 
@@ -47,7 +50,7 @@ def order_obj(jsonObj):
 
     ordrHash = {"glytoucan_ac":1, "mass":2, "iupac_extended":3, "wurcs":4, "glycoct":5,
             "species":6, "classification":7,"glycosylation":8,
-            "enzyme":9, "crossref":10}
+            "enzyme":9, "crossref":10, "go_annotation":11}
 
     for k1 in jsonObj:
         ordrHash[k1] = ordrHash[k1] if k1 in ordrHash else 1000
@@ -79,11 +82,15 @@ def main():
     config_obj = json.loads(open("../../conf/config-1.1.json", "r").read())
     path_obj  =  config_obj[config_obj["server"]]["pathinfo"]
 
-    species2taxid= {"human":9606, "mouse":10090}
-    taxid2name = {9606:"Homo sapiens", 10090:"Mus musculus"}
+    species_obj = config_obj["speciesinfo"]
+    species_list = config_obj["specieslist"]
+
+
+
 
     data_dir = "reviewed/"
-     
+    misc_dir = "generated/misc/"
+
     #load all dictionaries
     map_dict = {}
     dict_list_obj = json.loads(open("../../conf/protein_dictionaries.json", "r").read())
@@ -93,7 +100,7 @@ def main():
         map_dict[dict_name] = {}
         ind_list = dict_list_obj[dict_name]["indexlist"]
         for pattern in dict_list_obj[dict_name]["fileglob"]:
-            for in_file in glob.glob(data_dir + pattern):
+            for in_file in glob.glob(misc_dir + pattern):
                 sheet_obj = {}
                 libgly.load_sheet(sheet_obj, in_file, ",")
                 for row in sheet_obj["data"]:
@@ -107,33 +114,28 @@ def main():
         
 
 
-    #Load ortholog mapping
-    ortholog_dict = {}
-    in_file = data_dir + "/protein_ortholog.csv"
+    #Load homolog mapping
+    ortho_cls_dict = {}
+    canon2clsid = {}
+    in_file = data_dir + "/protein_homolog_clusters.csv"
     sheet_obj = {}
-    libgly.load_sheet_as_dict(sheet_obj, in_file, ",", "uniprotkb_canonical_ac")
+    libgly.load_sheet_as_dict(sheet_obj, in_file, ",", "homolog_cluster_id")
     tmp_fl = sheet_obj["fields"]
-    for main_id in sheet_obj["data"]:
-        for row in sheet_obj["data"][main_id]:
-            canon_one = main_id
-            canon_two = row[tmp_fl.index("uniprotkb_canonical_ac_ortholog")]
-            tax_id_one = row[tmp_fl.index("tax_id")]
-            tax_id_two = row[tmp_fl.index("tax_id_ortholog")]
-            dataset_name = row[tmp_fl.index("evidence_dataset_name")].lower()
-            dataset_id = row[tmp_fl.index("evidence_dataset_id")]
-            if canon_one not in ortholog_dict:
-                ortholog_dict[canon_one] = {}
-            if canon_two not in ortholog_dict:
-                ortholog_dict[canon_two] = {}
-            if canon_two not in ortholog_dict[canon_one]:
-                ortholog_dict[canon_one][canon_two] = {"taxid":tax_id_two, "evidence":[]}
-            if canon_one not in ortholog_dict[canon_two]:
-                ortholog_dict[canon_two][canon_one] = {"taxid":tax_id_one, "evidence":[]}
+    for homolog_cluster_id in sheet_obj["data"]:
+        for row in sheet_obj["data"][homolog_cluster_id]:
+            database_name = row[tmp_fl.index("database")] 
+            tax_id = row[tmp_fl.index("tax_id")]
+            canon = row[tmp_fl.index("uniprotkb_canonical_ac")]
+            tax_name = row[tmp_fl.index("tax_name")]
+            o = {"canon":canon, "taxid":tax_id, "taxname":tax_name, "database":database_name}
+            if homolog_cluster_id not in ortho_cls_dict:
+                ortho_cls_dict[homolog_cluster_id] = []
+            ortho_cls_dict[homolog_cluster_id].append(o)
             
-            url = map_dict["xrefdb2url"][dataset_name][0] % (dataset_id)
-            ev_obj = {"database":dataset_name, "id":dataset_id, "url":url}
-            ortholog_dict[canon_one][canon_two]["evidence"].append(ev_obj)
-            ortholog_dict[canon_two][canon_one]["evidence"].append(ev_obj)
+            if canon not in canon2clsid:
+                canon2clsid[canon] = []
+            if homolog_cluster_id not in canon2clsid[canon]:
+                canon2clsid[canon].append(homolog_cluster_id)
 
 
 
@@ -142,54 +144,61 @@ def main():
     work_book = {}
     seq_hash = {}
     canon2recname = {}
-    file_list_obj = json.loads(open("../../conf/protein_datasets.json", "r").read())
-    #file_list_obj = json.loads(open("./tmp/protein_datasets.json", "r").read())
 
-    for species in file_list_obj:
-        for sheet_name in file_list_obj[species]:
+    file_list_obj = json.loads(open("../../conf/protein_datasets.json", "r").read())
+    #file_list_obj = json.loads(open("../../conf/toyprotein_datasets.json", "r").read())
+
+
+
+
+
+    for species in species_list:
+        for sheet_name in file_list_obj["common"]["protein"] + file_list_obj[species]["protein"]:
             in_file = data_dir + "/%s_protein_%s.csv" % (species, sheet_name)
             if sheet_name not in work_book:
                 work_book[sheet_name] = {}
-            print "loading ", species, sheet_name
+            print "loading %s_%s_%s.csv " % (species, "protein", sheet_name)
             libgly.load_sheet_as_dict(work_book[sheet_name], in_file, ",", "uniprotkb_canonical_ac")
         
-            if sheet_name == "idmapping":
+            if sheet_name == "masterlist":
                 work_book[sheet_name]["fields"].append("tax_id")
                 for main_id in work_book[sheet_name]["data"]:
                     for row in work_book[sheet_name]["data"][main_id]:
-                        row.append(species2taxid[species])
+                        row.append(species_obj[species]["taxid"])
             if sheet_name == "recnames":
                 for main_id in work_book[sheet_name]["data"]:
                     for row in work_book[sheet_name]["data"][main_id]:
                         canon2recname[main_id] = row[0]
 
 
-
-
-        for sheet_name in ["glycosylation_sites_unicarbkb_glytoucan", "glycosylation_sites_uniprotkb","glycosylation_sites_pdb"]:
+        
+        for sheet_name in file_list_obj["common"]["proteoform"] + file_list_obj[species]["proteoform"]:
             in_file = data_dir + "/%s_proteoform_%s.csv" % (species, sheet_name)
-            if sheet_name not in work_book:
-                work_book[sheet_name] = {}
-            libgly.load_sheet_as_dict(work_book[sheet_name], in_file, ",", "uniprotkb_canonical_ac")
+            print "loading %s_%s_%s.csv " % (species, "proteoform", sheet_name)
+            if os.path.isfile(in_file) == True:
+                if sheet_name not in work_book:
+                    work_book[sheet_name] = {}
+                libgly.load_sheet_as_dict(work_book[sheet_name], in_file, ",", "uniprotkb_canonical_ac")
     
 
         for sheet_name in ["allsequences"]:
             in_file = data_dir + "/%s_protein_%s.fasta" % (species, sheet_name)
-            print "loading ", species, sheet_name
-            for record in SeqIO.parse(in_file, "fasta"):
-                seq_id = record.id.split("|")[1]
-                desc = record.description
-                seq_hash[seq_id] = str(record.seq.upper())
+            if os.path.isfile(in_file) == True:
+                print "loading %s_%s_%s.fasta" % (species, "protein", sheet_name)
+                for record in SeqIO.parse(in_file, "fasta"):
+                    seq_id = record.id.split("|")[1]
+                    desc = record.description
+                    seq_hash[seq_id] = str(record.seq.upper())
 
 
     #Load taxid mappings
     canon2taxid = {}
-    for species in file_list_obj:
-        in_file = data_dir + "/%s_protein_idmapping.csv" % (species)
+    for species in species_list:
+        in_file = data_dir + "/%s_protein_masterlist.csv" % (species)
         sheet_obj = {}                
         libgly.load_sheet_as_dict(sheet_obj, in_file, ",", "uniprotkb_canonical_ac")
         for main_id in sheet_obj["data"]:
-            canon2taxid[main_id] = species2taxid[species]
+            canon2taxid[main_id] = species_obj[species]["taxid"]
 
     
 
@@ -197,9 +206,9 @@ def main():
                         
 
     #Load do_id mappings
-    sheet_name = "domap"
+    sheet_name = "protein_domap"
     work_book[sheet_name] = {}
-    in_file = data_dir + "/human_protein_%s.csv" % (sheet_name)
+    in_file = data_dir + "/%s.csv" % (sheet_name)
     libgly.load_sheet_as_dict(work_book[sheet_name], in_file, ",", "do_id")
     doid2name = {}
     doid2xrefid = {}
@@ -212,7 +221,6 @@ def main():
             do_name = tmp_row[tmp_fl.index("do_name")]
             if do_name not in doid2name[do_id]:
                 doid2name[do_id].append(do_name)
-            
             xref_db = tmp_row[tmp_fl.index("xref_database")]
             id_in_xrefdb = tmp_row[tmp_fl.index("xref_database_id")]
             if do_id not in doid2xrefid:
@@ -229,8 +237,26 @@ def main():
             if do_id not in xrefid2doid[xref_db][id_in_xrefdb]:
                 xrefid2doid[xref_db][id_in_xrefdb].append(do_id)
 
+   
+    #Load do_id mappings
+    sheet_name = "human_protein_genomics_england_disease"
+    sheet_obj = {}
+    in_file = data_dir + "/%s.csv" % (sheet_name)
+    libgly.load_sheet(sheet_obj, in_file, ",")
+    tmp_fl = sheet_obj["fields"]
+    xref_db = "genomics_england"
+    xrefid2doid[xref_db] = {}
+    for row in sheet_obj["data"]:
+        do_id = row[tmp_fl.index("doid")]
+        id_in_xrefdb = row[tmp_fl.index("gene_name")]
+        if id_in_xrefdb not in xrefid2doid[xref_db]:
+            xrefid2doid[xref_db][id_in_xrefdb] = []
+        if do_id not in xrefid2doid[xref_db][id_in_xrefdb]:
+            xrefid2doid[xref_db][id_in_xrefdb].append(do_id)
 
 
+
+ 
 
     data_grid = {}
     seen_row = {}
@@ -252,13 +278,13 @@ def main():
     record_count = 0
     out_obj_list = []
     for main_id in data_grid:
-        if "idmapping" in  data_grid[main_id]:
+        if "masterlist" in  data_grid[main_id]:
             #Extract uniprotkb_ac
             uniprotkb_ac = main_id.split("-")[0]
 
             #Extract tax_id
-            tmp_fl = work_book["idmapping"]["fields"]
-            tmp_row = data_grid[main_id]["idmapping"][0]
+            tmp_fl = work_book["masterlist"]["fields"]
+            tmp_row = data_grid[main_id]["masterlist"][0]
 
 
             #Extract species
@@ -266,25 +292,25 @@ def main():
             tax_id = canon2taxid[main_id]
             url = map_dict["xrefdb2url"]["uniprotkb"][0] % (uniprotkb_ac)
             species.append({
-                "name":taxid2name[tax_id]
+                "name":species_obj[str(tax_id)]["taxname"]
                 ,"taxid":tax_id
                 ,"evidence":[{"database":"UniProtKB", "id":uniprotkb_ac,"url":url}]
             })
 
 
             #Extract refseq accession
-            refseq_ac, refseq_name, refseq_url = "", "", "" 
-            sheet_name = "refseq_protein_info"
+            refseq_ac, refseq_name, refseq_summary, refseq_url = "", "", "", "" 
+            sheet_name = "info_refseq"
             if sheet_name in data_grid[main_id]:
                 tmp_fl = work_book[sheet_name]["fields"]
                 tmp_row = data_grid[main_id][sheet_name][0]
                 refseq_ac = tmp_row[tmp_fl.index("p_refseq_ac_best_match")]
                 refseq_url = map_dict["xrefdb2url"]["refseq"][0] % (refseq_ac)
                 refseq_name = tmp_row[tmp_fl.index("refseq_protein_name")]
-
+                refseq_summary = tmp_row[tmp_fl.index("refseq_protein_summary")]
 
             #Extract from "information"
-            sheet_name = "information"
+            sheet_name = "info_uniprotkb"
             protein_mass, protein_length, uniprotkb_id = -1.0, -1, ""
             if sheet_name in data_grid[main_id]:
                 tmp_fl = work_book[sheet_name]["fields"]
@@ -319,17 +345,17 @@ def main():
             #Extract "glycosylation" from unicarbkb
             glycosylation_dict = {}
             seen_glyco_ev = {}
-            sheet_name = "glycosylation_sites_unicarbkb_glytoucan"
+            sheet_name = "glycosylation_sites_unicarbkb"
             if sheet_name in data_grid[main_id]:
                 tmp_fl = work_book[sheet_name]["fields"]
                 for tmp_row in data_grid[main_id][sheet_name]:
                     uckb_id = tmp_row[tmp_fl.index("unicarbkb_id")]
                     pos = tmp_row[tmp_fl.index("glycosylation_site_uniprotkb")]
-                    glytoucan_ac =  tmp_row[tmp_fl.index("glytoucan_ac")]
+                    glytoucan_ac =  tmp_row[tmp_fl.index("saccharide")]
                     glycosylation_type = tmp_row[tmp_fl.index("glycosylation_type")]
                     amino_acid = tmp_row[tmp_fl.index("amino_acid")].lower()
                     cond_list = []
-                    cond_list.append(uckb_id != "")
+                    #cond_list.append(uckb_id != "")
                     cond_list.append(pos != "")
                     cond_list.append(amino_acid != "")
                     cond_list.append(glycosylation_type != "")
@@ -337,6 +363,8 @@ def main():
                         pos = int(pos)
                         glycosylation_type = glycosylation_type[0].upper() + glycosylation_type[1:].lower()
                         amino_acid = amino_acid[0].upper() + amino_acid[1:]
+                        #only attached for now
+                        relation = "attached"
                         combo_id = "%s,%s,%s,%s" %(pos,glytoucan_ac,glycosylation_type,amino_acid)
                         #If this combo has not been populated
                         if combo_id not in glycosylation_dict:
@@ -346,7 +374,8 @@ def main():
                                 ,"type":glycosylation_type
                                 ,"position":pos
                                 ,"residue":amino_acid
-                                ,"evidence":[{"database":"UniCarbKB", "id":uckb_id, "url":uckb_url}]
+                                ,"relation":relation
+                                ,"evidence":[{"database":"UniCarbKB", "id":uniprotkb_ac, "url":uckb_url}]
                             }
                             ev_detail = "%s,%s,%s" % (combo_id,"UniCarbKB", uckb_id)
                             seen_glyco_ev[ev_detail] = True
@@ -359,27 +388,52 @@ def main():
                             seen_glyco_ev[ev_detail] = True
 
             #Add glycosylation from uniprot
-            sheet_name = "glycosylation_sites_uniprotkb"
-            if sheet_name in data_grid[main_id]:
+            sheet_name_list = ["glycosylation_sites_uniprotkb", "glycosylation_sites_pdb"]
+            sheet_name_list += ["glycosylation_sites_harvard"]
+            sheet_name_list += ["glycosylation_sites_tyr_o_linked"]
+            #sheet_name_list += ["glycosylation_sites_literature"]
+            for sheet_name in sheet_name_list:
+                if sheet_name not in data_grid[main_id]:
+                    continue
                 tmp_fl = work_book[sheet_name]["fields"]
                 for tmp_row in data_grid[main_id][sheet_name]:
+                    glytoucan_ac =  tmp_row[tmp_fl.index("saccharide")]
+                    if sheet_name not in ["glycosylation_sites_harvard"]:
+                        glytoucan_ac = ""
                     pos = tmp_row[tmp_fl.index("glycosylation_site_uniprotkb")]
-                    glytoucan_ac =  ""
                     glycosylation_type = tmp_row[tmp_fl.index("glycosylation_type")]
                     amino_acid = tmp_row[tmp_fl.index("amino_acid")].lower()
+                    relation = "attached"
                     cond_list = []
                     cond_list.append(pos != "")
                     cond_list.append(amino_acid != "")
                     cond_list.append(glycosylation_type != "")
+                    
                     if False not in cond_list:
+                        ev_obj = {}
+                        ev_detail = ""
                         pos = int(pos)
-                        glytoucan_ac = ""
                         glycosylation_type = glycosylation_type[0].upper() + glycosylation_type[1:].lower()
                         amino_acid = amino_acid[0].upper() + amino_acid[1:]
                         combo_id = "%s,%s,%s,%s" %(pos,glytoucan_ac,glycosylation_type,amino_acid)
-                        uniprot_url = map_dict["xrefdb2url"]["uniprotkb"][0] % (uniprotkb_ac + "#ptm_processing")
-                        ev_obj = {"database":"UniProtKB", "id":main_id, "url":uniprot_url}
-                        ev_detail = "%s,%s,%s" % (combo_id,"UniProtKB", main_id)
+                        if sheet_name == "glycosylation_sites_uniprotkb":
+                            url = map_dict["xrefdb2url"]["uniprotkb"][0] % (uniprotkb_ac + "#ptm_processing")
+                            ev_obj = {"database":"UniProtKB", "id":main_id, "url":url}
+                            ev_detail = "%s,%s,%s" % (combo_id,"UniProtKB", main_id)
+                        elif sheet_name == "glycosylation_sites_pdb":
+                            pdb_id =  tmp_row[tmp_fl.index("pdb_id")]
+                            pdb_pos = int(tmp_row[tmp_fl.index("glycosylation_site_pdb")])
+                            url = map_dict["xrefdb2url"]["pdb4glycosylation"][0] % (pdb_id)
+                            pdb_id_lbl = pdb_id + " (position %s)" % (pdb_pos)
+                            ev_obj = {"database":"PDB", "id":pdb_id_lbl, "url":url}
+                            ev_detail = "%s,%s,%s" % (combo_id,"PDB", pdb_id)
+                        elif sheet_name in ["glycosylation_sites_harvard", "glycosylation_sites_literature", "glycosylation_sites_tyr_o_linked"]:
+                            evdn = tmp_row[tmp_fl.index("evidence")]
+                            urlkey = "glygen_ds" if evdn.find("GLYDS") != -1 else "pubmed"
+                            database_name = "GlyGen" if evdn.find("GLYDS") != -1 else "PubMed"
+                            url = map_dict["xrefdb2url"][urlkey][0] % (evdn)
+                            ev_obj = {"database":database_name, "id":evdn, "url":url}
+                            ev_detail = "%s,%s,%s" % (combo_id,database_name, evdn)
                         #If this combo has not been populated 
                         if combo_id not in glycosylation_dict:
                             glycosylation_dict[combo_id] = {
@@ -387,6 +441,7 @@ def main():
                                 ,"type":glycosylation_type
                                 ,"position":pos
                                 ,"residue":amino_acid
+                                ,"relation":relation
                                 ,"evidence":[ev_obj]
                             }
                         elif ev_detail not in seen_glyco_ev:
@@ -394,57 +449,16 @@ def main():
                             glycosylation_dict[combo_id]["evidence"].append(ev_obj)
                             seen_glyco_ev[ev_detail] = True
 
-                        #Add pmid to evidence bucket
-                        if tmp_row[tmp_fl.index("data_source")] == "PubMed":
-                            pmid = tmp_row[tmp_fl.index("evidence")]
-                            pmid_url = map_dict["xrefdb2url"]["pubmed"][0] % (pmid)
-                            ev_obj = {"database":"PubMed", "id":pmid, "url":pmid_url}
-                            ev_detail = "%s,%s,%s" % (combo_id,"PubMed", pmid)
-                            if ev_detail not in seen_glyco_ev:
-                                glycosylation_dict[combo_id]["evidence"].append(ev_obj)
-                                seen_glyco_ev[ev_detail] = True
-            
-
-            #Add glycosylation from pdb
-            sheet_name = "glycosylation_sites_pdb"
-            if sheet_name in data_grid[main_id]:
-                tmp_fl = work_book[sheet_name]["fields"]
-                for tmp_row in data_grid[main_id][sheet_name]:
-                    pdb_id =  tmp_row[tmp_fl.index("pdb_id")]
-                    pos = tmp_row[tmp_fl.index("glycosylation_site_uniprotkb")]
-                    pdb_pos = tmp_row[tmp_fl.index("glycosylation_site_pdb")]
-                    glytoucan_ac =  tmp_row[tmp_fl.index("glytoucan_ac")]
-                    glycosylation_type = tmp_row[tmp_fl.index("glycosylation_type")]
-                    amino_acid = tmp_row[tmp_fl.index("amino_acid")].lower()
-                    cond_list = []
-                    cond_list.append(pos != "")
-                    cond_list.append(amino_acid != "")
-                    cond_list.append(glycosylation_type != "")
-                    if False not in cond_list:
-                        pos = int(pos)
-                        pdb_pos = int(pdb_pos)
-                        glytoucan_ac = ""
-                        glycosylation_type = obj["glycosylation_type"][0]
-                        glycosylation_type = glycosylation_type[0].upper() + glycosylation_type[1:].lower()
-                        amino_acid = amino_acid[0].upper() + amino_acid[1:]
-                        combo_id = "%s,%s,%s,%s" %(pos,glytoucan_ac,glycosylation_type,amino_acid)      
-                        pdb_url = map_dict["xrefdb2url"]["pdb4glycosylation"][0] % (pdb_id)
-                        pdb_id_lbl = pdb_id + " (position %s)" % (pdb_pos)
-                        ev_obj = {"database":"PDB", "id":pdb_id_lbl, "url":pdb_url}
-                        ev_detail = "%s,%s,%s" % (combo_id,"PDB", pdb_id)
-                        #If this combo has not been populated
-                        if combo_id not in glycosylation_dict:
-                            glycosylation_dict[combo_id] = {
-                                "glytoucan_ac":glytoucan_ac
-                                ,"type":glycosylation_type
-                                ,"position":pos
-                                ,"residue":amino_acid
-                                ,"evidence":[ev_obj]
-                            }
-                        elif ev_detail not in seen_glyco_ev:
-                            #If this combo has been populated, add PDB evidence
-                            glycosylation_dict[combo_id]["evidence"].append(ev_obj)
-                            seen_glyco_ev[ev_detail] = True
+                        if sheet_name == "glycosylation_sites_uniprotkb":
+                            #Add pmid to evidence bucket
+                            if tmp_row[tmp_fl.index("data_source")] == "PubMed":
+                                pmid = tmp_row[tmp_fl.index("evidence")]
+                                pmid_url = map_dict["xrefdb2url"]["pubmed"][0] % (pmid)
+                                ev_obj = {"database":"PubMed", "id":pmid, "url":pmid_url}
+                                ev_detail = "%s,%s,%s" % (combo_id,"PubMed", pmid)
+                                if ev_detail not in seen_glyco_ev:
+                                    glycosylation_dict[combo_id]["evidence"].append(ev_obj)
+                                    seen_glyco_ev[ev_detail] = True
 
             #Now make glycosylation list
             glycosylation_list = []
@@ -460,8 +474,8 @@ def main():
                 for tmp_row in data_grid[main_id][sheet_name]:
                     db_id = tmp_row[tmp_fl.index("database_id")]
                     db_label = tmp_row[tmp_fl.index("database_label")]
-                    url = map_dict["xrefdb2url"]["kegg"][0] % (db_id)
-                    pathway.append({"id":db_id, "name":db_label, "resource":"KEGG", "url":url})
+                    url = map_dict["xrefdb2url"]["kegg_protein"][0] % (db_id)
+                    pathway.append({"id":db_id, "name":db_label, "resource":"KEGG Pathway", "url":url})
 
             sheet_name = "xref_reactome"
             if sheet_name in data_grid[main_id]:
@@ -482,10 +496,54 @@ def main():
             if sheet_name in data_grid[main_id]:
                 keywords.append("glycohydrolase-activity")
 
+            #Extract GO annotation
+            go_ann_dict = {}
+            sheet_name = "go_annotation"
+            if sheet_name in data_grid[main_id]:
+                tmp_fl = work_book[sheet_name]["fields"]
+                for tmp_row in data_grid[main_id][sheet_name]:
+                    go_term_id = tmp_row[tmp_fl.index("go_term_id")]
+                    go_term_label = tmp_row[tmp_fl.index("go_term_label")]
+                    go_term_category = tmp_row[tmp_fl.index("go_term_category")]
+                    url = map_dict["xrefdb2url"]["uniprotkb"][0] % (uniprotkb_ac)
+                    ev_obj = {"database": "UniProtKB", "id":uniprotkb_ac, "url":url}
+                    go_term_id = go_term_id.replace("_", ":")
+                    url = map_dict["xrefdb2url"]["go"][0] % (go_term_id)
+                    o = {"name": go_term_label, "id":go_term_id, "url":url, "evidence":[ev_obj]}
+                    if go_term_category not in go_ann_dict:
+                        go_ann_dict[go_term_category] = []
+                    go_ann_dict[go_term_category].append(o)
 
-            #Extract function
+
+
+            go_ann_obj = {}
+            for go_term_category in go_ann_dict:
+                parts = go_term_category.split("_")
+                cat_label = parts[0][0:1].upper() + parts[0][1:] 
+                cat_label += " " + parts[1][0:1].upper() + parts[1][1:]
+                n = len(go_ann_dict[go_term_category])
+                obj = {"name":cat_label, "total":n, "go_terms":[]}
+                for o in go_ann_dict[go_term_category]:
+                    obj["go_terms"].append(o)
+                if "categories" not in go_ann_obj:
+                    go_ann_obj["categories"] = []
+                go_ann_obj["categories"].append(obj)
+
+
+            #Extract enzyme annotation
+            enzyme_ann = []
+            sheet_name = "enzyme_annotation_uniprotkb"
+            if sheet_name in data_grid[main_id]:
+                tmp_fl = work_book[sheet_name]["fields"]
+                for tmp_row in data_grid[main_id][sheet_name]:
+                    ec = tmp_row[tmp_fl.index("enzyme_ec")]
+                    activity = tmp_row[tmp_fl.index("enzyme_activity")]
+                    enzyme_ann.append({"ec":ec, "activity":activity})
+ 
+
+            #Extrac function
             function_list = []
-            sheet_name = "function_uniprot"
+            sheet_name = "function_uniprotkb"
             if sheet_name in data_grid[main_id]:
                 tmp_fl = work_book[sheet_name]["fields"]
                 seen = {"ann":{}}
@@ -500,7 +558,6 @@ def main():
                         function_obj = { "annotation":ann, "url":database_url, "evidence":ev_list}
                         function_list.append(function_obj)
                         seen["ann"][ann] = True
-
 
             sheet_name = "function_refseq"
             if sheet_name in data_grid[main_id]:
@@ -517,10 +574,6 @@ def main():
                         function_list.append(function_obj)
                         seen["ann"][ann] = True
 
-            #xxxxx
-            #tmp_fl = work_book[sheet_name]["fields"]
-            #for tmp_row in data_grid[main_id][sheet_name]:
-            #    val = tmp_row[tmp_fl.index("")]
 
 
 
@@ -528,7 +581,7 @@ def main():
             doid2icd10 = {}
             disease_dict = {}
             sheet_name = "disease"
-            seen = {"omim":{}}
+            seen = {"omim":{}, "mondo":{}, "genomics_england":{}}
             if sheet_name in data_grid[main_id]:
                 tmp_fl = work_book[sheet_name]["fields"]
                 for tmp_row in data_grid[main_id][sheet_name]:
@@ -543,8 +596,8 @@ def main():
                                 do_name = doid2name[do_id][0]
                                 do_name = do_name[0].upper() + do_name[1:]
                                 icd10_id = ""
-                                if "icd10cmid" in doid2xrefid[do_id]:
-                                    icd10_id = doid2xrefid[do_id]["icd10cmid"][0]
+                                if "icd10cm" in doid2xrefid[do_id]:
+                                    icd10_id = doid2xrefid[do_id]["icd10cm"][0]
                                 url = map_dict["xrefdb2url"]["do"][0] % (do_id)
                                 if do_id not in disease_dict:
                                     o = {"name":do_name,"doid":do_id,"icd10":icd10_id,"url":url, "evidence":[]}
@@ -552,10 +605,59 @@ def main():
                                 if id_in_database not in seen["omim"]:
                                     disease_dict[do_id]["evidence"].append(ev_obj)
                                     seen["omim"][id_in_database] = True
+                    elif database == "mondo":
+                        if id_in_database in xrefid2doid["mondo"]:
+                            url = map_dict["xrefdb2url"]["mondo"][0] % (id_in_database)
+                            ev_obj = {"database":"MONDO", "id":id_in_database,"url":url}
+                            for do_id in xrefid2doid["mondo"][id_in_database]:
+                                do_name = doid2name[do_id][0]
+                                do_name = do_name[0].upper() + do_name[1:]
+                                icd10_id = ""
+                                if "icd10cm" in doid2xrefid[do_id]:
+                                    icd10_id = doid2xrefid[do_id]["icd10cm"][0]
+                                url = map_dict["xrefdb2url"]["do"][0] % (do_id)
+                                if do_id not in disease_dict:
+                                    o = {"name":do_name,"doid":do_id,"icd10":icd10_id,"url":url, "evidence":[]}
+                                    disease_dict[do_id] = o
+                                if id_in_database not in seen["mondo"]:
+                                    disease_dict[do_id]["evidence"].append(ev_obj)
+                                    seen["mondo"][id_in_database] = True
+                    elif database == "genomics_england":
+                        if id_in_database in xrefid2doid["genomics_england"]:
+                            url = map_dict["xrefdb2url"]["genomics_england"][0] % (id_in_database)
+                            ev_obj = {"database":"Genomics England", "id":id_in_database,"url":url}
+                            for do_id in xrefid2doid["genomics_england"][id_in_database]:
+                                do_name = doid2name[do_id][0]
+                                do_name = do_name[0].upper() + do_name[1:]
+                                icd10_id = ""
+                                if "icd10cm" in doid2xrefid[do_id]:
+                                    icd10_id = doid2xrefid[do_id]["icd10cm"][0]
+                                url = map_dict["xrefdb2url"]["do"][0] % (do_id)
+                                if do_id not in disease_dict:
+                                    o = {"name":do_name,"doid":do_id,"icd10":icd10_id,"url":url, "evidence":[]}
+                                    disease_dict[do_id] = o
+                                if id_in_database not in seen["genomics_england"]:
+                                    disease_dict[do_id]["evidence"].append(ev_obj)
+                                    seen["genomics_england"][id_in_database] = True
+
 
             disease_list = []
             for do_id in disease_dict:
                 disease_list.append(disease_dict[do_id])
+
+            
+            #Extract glyco motifs
+            site_annotation_list = []
+            sheet_name = "glycosylation_motifs"
+            if sheet_name in data_grid[main_id]:
+                tmp_fl = work_book[sheet_name]["fields"]
+                for tmp_row in data_grid[main_id][sheet_name]:
+                    start_pos = int(tmp_row[tmp_fl.index("start_pos")])
+                    end_pos = int(tmp_row[tmp_fl.index("end_pos")])
+                    motif = tmp_row[tmp_fl.index("motif")]
+                    o = {"start_pos":start_pos,"end_pos":end_pos,"annotation":"n_glycosylation_sequon"}
+                    site_annotation_list.append(o)
+
 
 
             #Extract mutation
@@ -568,12 +670,14 @@ def main():
                     end_pos = start_pos
                     ref_aa = tmp_row[tmp_fl.index("ref_aa")]
                     alt_aa = tmp_row[tmp_fl.index("alt_aa")]
+                    patients_tested = tmp_row[tmp_fl.index("patients_tested")]
+                    patients_positive = tmp_row[tmp_fl.index("patients_positive")]
                     freq = tmp_row[tmp_fl.index("mut_freq")]
                     do_id = tmp_row[tmp_fl.index("do_id")]
                     do_name = tmp_row[tmp_fl.index("do_name")].split("/")[1].strip()
                     do_name = do_name[0].upper() + do_name[1:]
-                    s = "High frequency mutation in"
-                    ann = "%s %s (DOID:%s) observed in %s subjects" % (s, do_name,do_id,freq)
+                    ann = "Somatic mutation in %s (DOID:%s) with frequency of %s/%s (%s)" % (do_name,do_id,
+                            patients_positive, patients_tested,freq)
                     icd10_id = ""
                     database_url = map_dict["xrefdb2url"]["do"][0] % (do_id)
                     disease_obj = {"name":do_name, "icd10":icd10_id, "doid":do_id, "url":database_url}
@@ -581,6 +685,9 @@ def main():
                     ev_list = [{"database":"BioMuta", "id":uniprotkb_ac, "url":biomuta_url}]
                     mutation_obj = {
                         "annotation":ann, "type":"Point mutation", "start_pos":start_pos, "end_pos":end_pos,
+                        "subjects_tested":patients_tested,
+                        "subjects_positive":patients_positive,
+                        "frequency":freq,
                         "sequence_org":ref_aa, "sequence_mut":alt_aa,  
                         "disease":disease_obj, 
                         "evidence":ev_list
@@ -589,30 +696,50 @@ def main():
 
 
 
-            #Extract orthologs
-            orthologs = []
-            if main_id in ortholog_dict:
-                for ortholog_canon in ortholog_dict[main_id]:
-                    tax_id = int(ortholog_dict[main_id][ortholog_canon]["taxid"])
-                    org_name = taxid2name[tax_id]
-                    recname = canon2recname[ortholog_canon] if ortholog_canon in canon2recname else ""
-                    seq = seq_hash[ortholog_canon]
-                    obj = {
-                        "uniprot_canonical_ac":ortholog_canon
-                        ,"protein_name":recname
-                        ,"tax_id":tax_id
-                        ,"organism":org_name
-                        ,"evidence":[]
-                        ,"sequence": {
-                            "sequence": seq
-                            ,"length": len(seq)
-                        }
-                    }
-                    for o in ortholog_dict[main_id][ortholog_canon]["evidence"]:
-                        obj["evidence"].append(o)
-                    orthologs.append(obj)
+            #Extract homologs
+            homologs = []
+            if main_id in canon2clsid:
+                homolog_dict = {}
+                seen_homolog = {}
+                for homolog_cluster_id in canon2clsid[main_id]:
+                    for obj in ortho_cls_dict[homolog_cluster_id]:
+                        homolog_canon = obj["canon"]
+                        if homolog_canon == main_id:
+                            continue
+
+                        tax_id = int(obj["taxid"])
+                        tax_name = obj["taxname"]
+                        recname = canon2recname[homolog_canon] if homolog_canon in canon2recname else ""
+                        seq = seq_hash[homolog_canon]
+                        database_name = obj["database"]
+                        database_id = homolog_cluster_id
+                        urlkey = database_name.lower()
+                        if urlkey == "mgi":
+                            urlkey = "mgi_homologset"
+                        if urlkey == "oma":
+                            database_id = uniprotkb_ac
+                        database_url = map_dict["xrefdb2url"][urlkey][0] % (database_id)
+                        ev_obj = {"database":database_name.upper(), "id":database_id, "url":database_url}
+                        if homolog_canon not in homolog_dict:
+                            homolog_dict[homolog_canon] = {
+                                "uniprot_canonical_ac":homolog_canon
+                                ,"protein_name":recname
+                                ,"tax_id":tax_id
+                                ,"organism":tax_name
+                                ,"evidence":[ev_obj]
+                                ,"sequence": {
+                                    "sequence": seq
+                                    ,"length": len(seq)
+                                }
+                            }
+                        else:
+                            homolog_dict[homolog_canon]["evidence"].append(ev_obj)
+        
+                for homolog_canon in homolog_dict:
+                    homologs.append(homolog_dict[homolog_canon])
 
 
+        
             #Extract transcript
             isoform2locusobj = {}
             sheet_name = "transcriptlocus"
@@ -626,6 +753,11 @@ def main():
                     peptide_url = map_dict["xrefdb2url"]["ensembl"][0] % (peptide_id)
                     start_pos = int(tmp_row[tmp_fl.index("start_pos")])
                     end_pos = int(tmp_row[tmp_fl.index("end_pos")])
+                    strand = tmp_row[tmp_fl.index("strand")]
+                    if strand == "0":
+                        start_pos = int(tmp_row[tmp_fl.index("end_pos")])
+                        end_pos = int(tmp_row[tmp_fl.index("start_pos")])
+
                     chr_id = tmp_row[tmp_fl.index("chromosome_id")]
                     isoform2locusobj[isoform] = {
                         "chromosome":chr_id
@@ -644,7 +776,7 @@ def main():
                             }
                         ]
                     }
-            
+
             #Extract transcript
             genelocus_dict = {}
             sheet_name = "genelocus"
@@ -654,6 +786,10 @@ def main():
                 ensemble_gene_id = tmp_row[tmp_fl.index("ensembl_gene_id")]
                 start_pos = int(tmp_row[tmp_fl.index("start_pos")])
                 end_pos = int(tmp_row[tmp_fl.index("end_pos")])
+                strand = tmp_row[tmp_fl.index("strand")]
+                if strand == "0":
+                    start_pos = int(tmp_row[tmp_fl.index("end_pos")])
+                    end_pos = int(tmp_row[tmp_fl.index("start_pos")])
                 chr_id = tmp_row[tmp_fl.index("chromosome_id")]
                 gene_url = map_dict["xrefdb2url"]["ensembl"][0] % (ensemble_gene_id)
                 genelocus_dict[main_id] = {
@@ -673,7 +809,10 @@ def main():
             #Add pdb references
             bgee_id = ""
             gene = []
-            for xrefdb in ["pdb", "kegg", "reactome", "bgee", "hgnc", "mgi"]:
+            xref_list = ["pdb", "kegg", "reactome", "bgee", "hgnc", "mgi", "rgd", "oma"]
+            xref_list += ["brenda","cazy", "cdd", "interpro","genecards", "geneid"]
+            xref_list += ["pfam", "panther", "pro", "nextprot", "intact"]
+            for xrefdb in xref_list:
                 sheet_name = "xref_" + xrefdb
                 db_name = config_obj["xref"][sheet_name]["dbname"]
                 if sheet_name in data_grid[main_id]:
@@ -681,12 +820,18 @@ def main():
                     for tmp_row in data_grid[main_id][sheet_name]:
                         db_label = tmp_row[tmp_fl.index("database_label")]
                         db_id = tmp_row[tmp_fl.index("database_id")]
-                        db_url = map_dict["xrefdb2url"][xrefdb][0] % (db_id)
+                        url_key = xrefdb
+                        if url_key == "kegg":
+                            url_key = "kegg_protein"
+                            db_name = "KEGG Pathway"
+                        db_url = "N/A"
+                        if url_key in map_dict["xrefdb2url"]:
+                            db_url = map_dict["xrefdb2url"][url_key][0] % (db_id)
                         o = {"database":db_name, "id":db_id, "url":db_url}
                         crossref.append(o)
                         if xrefdb == "bgee":
                             bgee_id = db_id
-                        if xrefdb in ["hgnc", "mgi"] and db_label != "":
+                        if xrefdb in ["hgnc", "mgi", "rgd"] and db_label != "":
                             locus_obj = genelocus_dict[main_id] if main_id in genelocus_dict else {}
                             gene.append({"name":db_label, "url":db_url, "locus":locus_obj})
 
@@ -748,7 +893,7 @@ def main():
 
             #Extract isoforms
             isoforms = []
-            sheet_name = "idmapping"
+            sheet_name = "masterlist"
             if sheet_name in data_grid[main_id]:
                 tmp_fl = work_book[sheet_name]["fields"]
                 for tmp_row in data_grid[main_id][sheet_name]:
@@ -778,28 +923,51 @@ def main():
 
 
             #Extract publication
+            pub_dict = {}
+            src_dict = {
+                "citations_uniprotkb":{"dbname":"UniProtKB", "urlkey":"uniprotkb_pub"},
+                "citations_refseq":{"dbname":"RefSeq", "urlkey":"refseq_pub"},
+                "citations_unicarbkb":{"dbname":"UniCarbKB", "urlkey":"unicarbkb_pub"}
+            }
+            for sheet_name in src_dict:
+                if sheet_name in data_grid[main_id]:
+                    tmp_fl = work_book[sheet_name]["fields"]
+                    for tmp_row in data_grid[main_id][sheet_name]:
+                        pmid = tmp_row[tmp_fl.index("pmid")]
+                        title = tmp_row[tmp_fl.index("title")]
+                        journal_name = tmp_row[tmp_fl.index("journal_name")]
+                        pub_date = tmp_row[tmp_fl.index("publication_date")] if "publication_date" in tmp_fl else ""
+                        pub_date = pub_date.split(" ")[0]
+                        source = src_dict[sheet_name]["dbname"]
+                        url_key = src_dict[sheet_name]["urlkey"]
+                        authors = tmp_row[tmp_fl.index("authors")]
+                        if pmid != "":
+                            database_id = uniprotkb_ac if url_key in ["uniprotkb_pub", "unicarbkb_pub"] else refseq_ac
+                            url = map_dict["xrefdb2url"][url_key][0] % (database_id)
+                            ev_obj = {"id":database_id, "database":source, "url":url}
+                            if pmid not in pub_dict and "" not in [pmid, title, journal_name]:
+                                url = map_dict["xrefdb2url"]["pubmed"][0] % (pmid)
+                                pub_obj = {"pmid":pmid, "title":title, "journal":journal_name,"url":url, 
+                                        "date":pub_date, "evidence":[ev_obj], "authors":authors}
+                                pub_dict[pmid] = pub_obj
+                            else:
+                                pub_dict[pmid]["evidence"].append(ev_obj)
+             
             publication = []
-            sheet_name = "citations"
-            seen_publication = {}
-            if sheet_name in data_grid[main_id]:
-                tmp_fl = work_book[sheet_name]["fields"]
-                for tmp_row in data_grid[main_id][sheet_name]:
-                    pmid = tmp_row[tmp_fl.index("pmid")]
-                    title = tmp_row[tmp_fl.index("title")]
-                    journal_name = tmp_row[tmp_fl.index("journal_name")]
-                    if pmid != "":
-                        url = map_dict["xrefdb2url"]["pubmed"][0] % (pmid)
-                        if pmid not in seen_publication and "" not in [pmid, title, journal_name]:
-                            pub_obj = {"pmid":pmid, "title":title, "journal":journal_name,"url":url}
-                            publication.append(pub_obj)
-                            seen_publication[pmid] = True
+            for pmid in pub_dict:
+                publication.append(pub_dict[pmid])
+            
+            publication.sort(key=get_sort_key_value, reverse=True)
+
 
             out_obj = {
                     "uniprot_canonical_ac":main_id
+                    ,"uniprot_ac":uniprotkb_ac
                     ,"uniprot_id":uniprotkb_id
                     ,"refseq":{
                         "ac":refseq_ac
                         ,"name":refseq_name
+                        ,"summary":refseq_summary
                         ,"url":refseq_url
 
                     }
@@ -823,7 +991,10 @@ def main():
                     ,"keywords":keywords
                     ,"publication":publication
                     ,"pathway":pathway
-                    ,"orthologs":orthologs
+                    ,"orthologs":homologs
+                    ,"go_annotation":go_ann_obj
+                    ,"enzyme_annotation":enzyme_ann
+                    ,"site_annotation":site_annotation_list
             }
             out_obj_list.append(out_obj)
             record_count += 1
@@ -834,37 +1005,43 @@ def main():
     print " ... final compiled %s objects" % (record_count)
 
 
-    #make dictionary of protein names to name ortholog protein 
+    #make dictionary of protein names to name homolog protein 
     canon2protein_name = {}
     for obj in out_obj_list:
-        uniprot_canonical_ac = obj["uniprot_canonical_ac"]
+        uniprotkb_canonical_ac = obj["uniprot_canonical_ac"]
         protein_name = obj["recommendedname"]["full"] if "full" in obj["recommendedname"] else ""
-        canon2protein_name[uniprot_canonical_ac] = protein_name
+        canon2protein_name[uniprotkb_canonical_ac] = protein_name
         
     for obj in out_obj_list:
         for o in obj["orthologs"]:
-            uniprot_canonical_ac = o["uniprot_canonical_ac"]
-            if "idmapping" in  data_grid[uniprot_canonical_ac]:
-                o["protein_name"] = canon2protein_name[uniprot_canonical_ac]
+            uniprotkb_canonical_ac = o["uniprot_canonical_ac"]
+            if "masterlist" in  data_grid[uniprotkb_canonical_ac]:
+                o["protein_name"] = canon2protein_name[uniprotkb_canonical_ac]
             else:
                 o["protein_name"] = ""
 
 
-    fout_obj = {}
+    #fout_obj = {}
     record_count = 0
     for obj in out_obj_list:
         cond_list= []
-        if False not in cond_list:
-            #clean_obj(obj)
-            fout_obj[obj["uniprot_canonical_ac"]] = order_obj(obj)
-            record_count += 1 
-            if record_count%1000 == 0:
-                print " ... filtered %s objects" % (record_count)
-        
-    out_file = path_obj["jsondbpath"] + "proteindb.json"
-    with open(out_file, "w") as FW:
-        FW.write("%s\n" % (json.dumps(fout_obj, indent=4)))
+        if False in cond_list:
+            continue
+        #clean_obj(obj)
+        #fout_obj[obj["uniprot_canonical_ac"]] = obj
+        out_file = path_obj["jsondbpath"] + "/proteindb/%s.json" % (obj["uniprot_canonical_ac"])
+        with open(out_file, "w") as FW:
+            FW.write("%s\n" % (json.dumps(obj, indent=4)))
+        record_count += 1 
+        if record_count%1000 == 0:
+            print " ... created %s objects" % (record_count)
     print " ... final filtered in: %s objects" % (record_count)
+
+
+    #out_file = path_obj["jsondbpath"] + "proteindb.json"
+    #with open(out_file, "w") as FW:
+    #    FW.write("%s\n" % (json.dumps(fout_obj, indent=4)))
+    #print " ... final filtered in: %s objects" % (record_count)
 
 
 

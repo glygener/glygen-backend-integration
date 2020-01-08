@@ -3,7 +3,14 @@
 	,"module":"datasetviewer"
 	,"title":"Dataset Collection <font color=red>(DRAFT)</font>"
 	,"desc":""
-	,"sections":[
+        ,"pathinfo":{
+            "htmlroot":"/bco_editor/",
+            "schemaroot":"/bco_editor/schema/",
+            "htmlpath":"/var/www/html/datasetviewer/bco_editor/",
+            "schemapath":"/var/www/html/datasetviewer/bco_editor/schema/",
+            "bcoprefix":"http://data.glygen.org/DSBCO_%s"
+        }   
+        ,"sections":[
 		{"id":"about", "label":"About", "access":"111"}
 		,{"id":"browsedata", "label":"Browse Data", "access":"111"}
 		,{"id":"schema", "label":"Data Schema", "access":"111"}
@@ -27,7 +34,7 @@
                 "dbinfo":{
                         "mongodbname":"glydb"
                         ,"mongodbuser":"glydbadmin"
-                        ,"mongodbpassword":"glydbpass"
+                        ,"mongodbpassword":"somepassword"
                         ,"sessionlife":3600
                         ,"collections":{
                             "bco":"c_bco"

@@ -18,7 +18,6 @@ __version__="1.0"
 __status__ = "Dev"
 
 
-##########################
 def get_counter(counter, prefix):
 
     if prefix not in counter:
@@ -31,22 +30,35 @@ def get_counter(counter, prefix):
 
 
 
-#######################################
+def print_triple(triple, seen):
+
+    if triple not in seen["trpl"]:
+        print  triple
+        seen["trpl"][triple] = True
+
+
+
+
+
 def main():
 
         config_json = json.loads(open("../../conf/config-1.1.json", "r").read())
         path_obj  =  config_json[config_json["server"]]["pathinfo"]
 
-        jsondb_file = path_obj["jsondbpath"] + "/glycandb.json"
-        glycan_obj_list = json.loads(open(jsondb_file, "r").read())
+        glycan_obj_list = {}
+        for in_file in glob.glob("generated/datasets/jsondb/glycandb/*.json"):
+            glytoucan_ac = in_file.split("/")[-1].split(".")[0]
+            obj = json.loads(open(in_file, "r").read())
+            glycan_obj_list[glytoucan_ac] = obj
 
-        seen_triple = {}
+
+        seen = {"trpl":{}, "res":{}, "rxn":{}}
         counter = {}
         ns_map =  config_json["nsmap"]
         uri_map = config_json["urimap"]
 
         data_dir = "unreviewed/"
-        proteinac2ec = {}
+        ac2ec = {}
         for species in ["human", "mouse"]:
             in_file = data_dir + "/%s_protein_xref_brenda.csv" % (species)
             sheet_obj = {}
@@ -55,12 +67,14 @@ def main():
             for main_id in sheet_obj["data"]:
                 for row in sheet_obj["data"][main_id]:
                     ac = main_id.split("-")[0]
-                    proteinac2ec[ac] = row[0]
+                    ac2ec[ac] = row[0]
         
         #generate glycosequence internal ids
         glycanac2seqid = {}
         for glycan_ac in glycan_obj_list:
-            glycanac2seqid[glycan_ac] = get_counter(counter, "GLYCOSEQ")
+            for seq_format in ['wurcs', 'glycoct', 'iupac', 'glycam', 'inchi','smiles_isomeric']:
+                combo_ac = "%s_%s" % (glycan_ac, seq_format)
+                glycanac2seqid[combo_ac] = get_counter(counter, "GLYCOSEQ")
 
 
 
@@ -69,104 +83,132 @@ def main():
 
             glycan_url = uri_map["glycan:Saccharide"] % (glycan_ac)
             triple = "<%s> <%s%s> <%s%s> ." % (glycan_url, ns_map["rdf"], "type", ns_map["glycan"], "Saccharide")
-            if triple not in seen_triple:
-                print triple
-                seen_triple[triple] = True
+            print_triple(triple, seen)
 
             image_url = uri_map["glycan:Image"] % (glycan_ac)
             triple = "<%s> <%s%s> <%s> ." % (glycan_url, ns_map["glycan"],"has_image", image_url)
-            if triple not in seen_triple:
-                print triple
-                seen_triple[triple] = True
+            print_triple(triple, seen)
 
             for key in ['mass']:
-                mass_lit = "\"%s\"^^<%s%s>" % (obj[key], ns_map["xsd"], "float")
-                triple = "<%s> <%s%s> %s ." % (glycan_url, ns_map["gly"],"mass", mass_lit)
-                if triple not in seen_triple:
-                    print triple
-                    seen_triple[triple] = True
+                if key in obj:
+                    mass_lit = "\"%s\"^^<%s%s>" % (obj[key], ns_map["xsd"], "float")
+                    triple = "<%s> <%s%s> %s ." % (glycan_url, ns_map["gly"],"mass", mass_lit)
+                    print_triple(triple, seen)
 
-            for key in ['wurcs', 'glycoct', 'iupac']:
-                if obj[key] != "":
-                    seq_id = glycanac2seqid[glycan_ac]
+            for seq_format in ['wurcs', 'glycoct', 'iupac', 'glycam', 'inchi','smiles_isomeric']:
+                if obj[seq_format] != "":
+                    combo_ac = "%s_%s" % (glycan_ac, seq_format)
+                    seq_id = glycanac2seqid[combo_ac]
                     seq_url = "%s#%s" % (glycan_url, seq_id)
                     triple = "<%s> <%s%s> <%s> ." % (glycan_url, ns_map["glycan"],"has_glycosequence", seq_url)
-                    if triple not in seen_triple:
-                        print triple
-                        seen_triple[triple] = True
-                
-                    seq_lit = "\"%s\"^^<%s%s>" % (obj[key], ns_map["xsd"], "string")
+                    print_triple(triple, seen)
+               
+                    triple = "<%s> <%s%s> <%s%s> ." % (seq_url, ns_map["rdf"], "type", ns_map["glycan"], "Glycosequence")
+                    print_triple(triple, seen)
+
+                    seq_lit = "\"%s\"" % (obj[seq_format])
                     triple = "<%s> <%s%s> %s ." % (seq_url, ns_map["glycan"], "has_sequence", seq_lit)
-                    if triple not in seen_triple:
-                        print triple
-                        seen_triple[triple] = True
+                    print_triple(triple, seen)
                 
-                    format_url = "%s%s%s" % (ns_map["glycan"], "carbohydrate_format_",key)
+                    format_url = "%s%s%s" % (ns_map["glycan"], "carbohydrate_format_",seq_format)
                     triple = "<%s> <%s%s> <%s> ." % (seq_url, ns_map["glycan"], "in_carbohydrate_format", format_url)
-                    if triple not in seen_triple:
-                        print triple
-                        seen_triple[triple] = True
+                    print_triple(triple, seen)
 
             for key in ['species']:
                 for o in obj[key]:
                     src_id = get_counter(counter, "SRC")
                     src_url = "%s#%s" % (glycan_url, src_id)
                     triple = "<%s> <%s%s> <%s> ." % (glycan_url, ns_map["glycan"], "is_from_source", src_url)
-                    if triple not in seen_triple:
-                        print triple
-                        seen_triple[triple] = True
+                    print_triple(triple, seen)
                     
-                    tax_url = "<%s%s%s>"  % (ns_map["up"], "taxonomy/" , o["taxid"])
+                    tax_url = "%s%s%s"  % (ns_map["up"], "taxonomy/" , o["taxid"])
                     triple = "<%s> <%s%s> <%s> ." % (src_url, ns_map["glycan"], "has_taxon", tax_url)
-                    if triple not in seen_triple:
-                        print triple
-                        seen_triple[triple] = True
+                    print_triple(triple, seen)
 
 
             for key in ['enzyme']:
                 if len(obj[key]) > 0:
                     for o in obj[key]:
                         protein_ac = o["uniprot_canonical_ac"][:-2]
+                        uniprot_ac_url = uri_map["up:Protein"] % (protein_ac)
                         ec = ac + "-N/A" 
-                        if protein_ac in proteinac2ec:
-                            ec = protein_ac + "-" + proteinac2ec[protein_ac]
-                        rxn_id = get_counter(counter, "RXN")
-                        rxn_url = "%s#%s" % (glycan_url, rxn_id)
+                        if protein_ac in ac2ec:
+                            ec = protein_ac + "-" + ac2ec[protein_ac]
+                        if protein_ac not in seen["rxn"]:
+                            seen["rxn"][protein_ac] = get_counter(counter, "RXN")
+                        rxn_id = seen["rxn"][protein_ac]
+                        rxn_url = "%s%s%s"  % (ns_map["gly"], "reaction/" , rxn_id)
                         triple = "<%s> <%s%s> <%s> ." % (glycan_url, ns_map["glycan"], "synthesized_by", rxn_url)
-                        if triple not in seen_triple:
-                           print triple
-                           seen_triple[triple] = True
+                        print_triple(triple, seen)
 
-                        enzyme_url = "%s%s%s"  % (ns_map["up"], "enzyme/" ,ec) 
-                        triple = "<%s> <%s%s> <%s> ." % (rxn_url, ns_map["glycan"], "has_enzyme", enzyme_url)
-                        if triple not in seen_triple:
-                            print triple
-                            seen_triple[triple] = True
+                        triple = "<%s> <%s%s> <%s%s> ." % (rxn_url, ns_map["rdf"], "type", ns_map["glycan"], "Glycosyltransferase_Reaction")
+                        print_triple(triple, seen)
+
+                        triple = "<%s> <%s%s> <%s> ." % (rxn_url, ns_map["gly"], "has_enzyme_protein", uniprot_ac_url)
+                        print_triple(triple, seen)
+
+            for key in ['residues']:
+                for o in obj[key]:
+                    canon_residue_id = ""
+                    if o["id"] not in seen["res"]:
+                        canon_residue_id = get_counter(counter, "RES")
+                        seen["res"][o["id"]] = canon_residue_id
+                    else:
+                        canon_residue_id = seen["res"][o["id"]]
+                    canon_residue_url = "%s%s%s"  % (ns_map["gly"], "residue/" , canon_residue_id)
+                    triple = "<%s> <%s%s> <%s> ." % (glycan_url, ns_map["gly"], "has_canonical_residue", canon_residue_url)
+                    print_triple(triple, seen)
+                   
+                    if o["parentid"] not in seen["res"]:
+                        parent_residue_id = get_counter(counter, "RES")
+                        seen["res"][o["parentid"]] = parent_residue_id
+                    else:
+                        parent_residue_id = seen["res"][o["parentid"]]
+
+                    parent_residue_url = "%s%s%s"  % (ns_map["gly"], "residue/" , parent_residue_id)
+                    triple = "<%s> <%s%s> <%s> ." % (canon_residue_url, ns_map["gly"], "has_parent", parent_residue_url)
+                    print_triple(triple, seen)
+
+
+
+                    lit = "\"%s\"" % (o["name"].lower())
+                    triple = "<%s> <%s%s> %s ." % (canon_residue_url, ns_map["gly"], "has_residue_name", lit)
+                    print_triple(triple, seen)
+
+                    lit = "\"%s\"" % (o["name"].lower())
+                    triple = "<%s> <%s%s> %s ." % (canon_residue_url, ns_map["gly"], "has_residue_id", lit)
+                    print_triple(triple, seen)
+
+                    canon = o["attachedby"][4:]
+                    if canon not in seen["rxn"]:
+                        seen["rxn"][canon] = get_counter(counter, "RXN")
+                    rxn_id = seen["rxn"][canon]
+                    rxn_url = "%s%s%s"  % (ns_map["gly"], "reaction/" , rxn_id)
+                    triple = "<%s> <%s%s> <%s> ." % (canon_residue_url, ns_map["gly"], "attached_by", rxn_url)
+                    print_triple(triple, seen)
+                    
+                    uniprot_ac_url = uri_map["up:Protein"] % (canon[:-2])
+                    triple = "<%s> <%s%s> <%s> ." % (rxn_url, ns_map["gly"], "has_enzyme_protein", uniprot_ac_url)
+                    print_triple(triple, seen)
 
 
             for key in ['crossref']:
                 for o in obj[key]:
                     db_url = "%s%s%s" % (ns_map["glycan"], "database_",  o["database"].lower().replace(" ", ""))
                     triple = "<%s> <%s%s> <%s> ." % (glycan_url, ns_map["glycan"], "glycan_database", db_url)
-                    if triple not in seen_triple:
-                        print  triple
-                        seen_triple[triple] = True
+                    print_triple(triple, seen)
 
-                    label_lit = "\"%s\"^^<%s%s>" % (o["database"].lower(), ns_map["xsd"], "string")
+                    label_lit = "\"%s\"" % (o["database"].lower())
                     triple = "<%s> <%s%s> %s ." % (db_url, ns_map["rdfs"], "label", label_lit)
-                    if triple not in seen_triple:
-                        print triple
-                        seen_triple[triple] = True
-
-                    triple = "<%s> <%s%s> <%s> ." % (db_url, ns_map["rdfs"], "recordurl", o["url"])
-                    if triple not in seen_triple:
-                        print triple
-                        seen_triple[triple] = True
-                    urltmpl_lit = "\"%s\"^^<%s%s>" % ("http://xxx.yy.zzz", ns_map["xsd"], "string")
+                    print_triple(triple, seen)
+        
+                    url_lit = "\"%s\"" % (o["url"])
+                    triple = "<%s> <%s%s> %s ." % (db_url, ns_map["rdfs"], "recordurl", url_lit)
+                    print_triple(triple, seen)
+                    
+                    urltmpl_lit = "\"%s\"" % ("http://xxx.yy.zzz")
                     triple = "<%s> <%s%s> <%s> ." % (db_url, ns_map["glycan"], "has_url_template", urltmpl_lit)
-                    if triple not in seen_triple:
-                        print triple
-                        seen_triple[triple] = True
+                    print_triple(triple, seen)
 
             for key in ["motifs"]:
                 for o in obj[key]:
@@ -175,26 +217,21 @@ def main():
                     motif_url = uri_map["glycan:Glycan_Motif"] % ( motif_ac)
                     triple = "<%s> <%s%s> <%s%s> ." % (motif_url, ns_map["rdf"], "type", 
                             ns_map["glycan"], "Glycan_Motif")
-                    if triple not in seen_triple:
-                        print triple
-                        seen_triple[triple] = True
+                    print_triple(triple, seen)
 
                     triple = "<%s> <%s%s> <%s> ." % (glycan_url, ns_map["glycan"], "has_motif", motif_url)
-                    if triple not in seen_triple:
-                        print triple
-                        seen_triple[triple] = True
+                    print_triple(triple, seen)
 
-                    motif_seq_url = "%s#%s" % (motif_url, glycanac2seqid[motif_ac])
-                    triple = "<%s> <%s%s> <%s> ." %(motif_url,ns_map["glycan"],"has_glycosequence", motif_seq_url)
-                    if triple not in seen_triple:
-                        print triple
-                        seen_triple[triple] = True
+                    for seq_format in ['wurcs', 'glycoct', 'iupac', 'glycam', 'inchi','smiles_isomeric']:
+                        combo_ac = "%s_%s" % (motif_ac, seq_format)
+                        if combo_ac in glycanac2seqid:
+                            motif_seq_url = "%s#%s" % (motif_url, glycanac2seqid[combo_ac])
+                            triple = "<%s> <%s%s> <%s> ." %(motif_url,ns_map["glycan"],"has_glycosequence", motif_seq_url)
+                            print_triple(triple, seen)
 
-                    motif_name_lit = "\"%s\"^^<%s%s>" % (motif_name, ns_map["xsd"], "string")
-                    triple = "<%s> <%s%s> %s ." % (motif_url, ns_map["glycan"], "has_motif_name", motif_name_lit)
-                    if triple not in seen_triple:
-                        print triple
-                        seen_triple[triple] = True
+                    motif_name_lit = "\"%s\"" % (motif_name)
+                    triple = "<%s> <%s%s> %s ." % (motif_url, ns_map["gly"], "has_motif_name", motif_name_lit)
+                    print_triple(triple, seen)
 
 
 

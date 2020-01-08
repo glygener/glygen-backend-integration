@@ -1,0 +1,60 @@
+{ 
+    "server":"dev",
+    "specieslist":["human", "mouse", "rat"],
+    "speciesinfo":{
+        "human":{"taxid":9606, "taxname":"Homo sapiens"}
+        ,"mouse":{"taxid":10090, "taxname":"Mus musculus"}
+        ,"rat":{"taxid":10116, "taxname":"Rattus norvegicus"}
+        ,"9606":{"taxid":9606, "taxname":"Homo sapiens", "shortname":"human"}
+        ,"10090":{"taxid":10090, "taxname":"Mus musculus", "shortname":"mouse"}
+        ,"10116":{"taxid":10116, "taxname":"Rattus norvegicus", "shortname":"rat"}
+    },
+    "pathinfo":{
+        "downloads":"/data/projects/glygen/downloads/"
+        ,"unreviewed":"/data/projects/glygen/generated/datasets/unreviewed/"
+        ,"reviewed":"/data/projects/glygen/generated/datasets/reviewed/"
+        ,"logs":"/data/projects/glygen/generated/datasets/logs/"
+        ,"intermediate":"/data/projects/glygen/generated/datasets/intermediate/"
+        ,"misc":"/data/projects/glygen/generated/misc/"
+    },
+    "xref":{
+        "xref_reactome": {"dbname":"Reactome", "lblflag":true},
+        "xref_hgnc":{"dbname":"HGNC", "lblflag":true},
+        "xref_mgi":{"dbname":"MGI", "lblflag":true},
+        "xref_rgd":{"dbname":"RGD", "lblflag":true},
+        "xref_bgee":{"dbname":"Bgee", "lblflag":true},
+        "xref_biomuta":{"dbname":"BioMuta", "lblflag":false},
+        "xref_brenda":{"dbname":"BRENDA", "lblflag":true},
+        "xref_cazy":{"dbname":"CAZy", "lblflag":true},
+        "xref_cdd":{"dbname":"CDD", "lblflag":true},
+        "xref_chembl":{"dbname":"ChEMBL", "lblflag":false},
+        "xref_dbsnp":{"dbname":"dbSNP", "lblflag":false},
+        "xref_ensembl":{"dbname":"ENSEMBL", "lblflag":false},
+        "xref_enzyme":{"dbname":"ENZYME", "lblflag":false},
+        "xref_genecards":{"dbname":"GeneCards", "lblflag":false},
+        "xref_geneid":{"dbname":"GeneID", "lblflag":false},
+        "xref_interpro":{"dbname":"InterPro", "lblflag":true},
+        "xref_mim":{"dbname":"MIM", "lblflag":true},
+        "xref_nextprot":{"dbname":"neXtProt", "lblflag":false},
+        "xref_oma":{"dbname":"OMA", "lblflag":false},
+        "xref_refseq":{"dbname":"RefSeq", "lblflag":false},
+        "xref_intact":{"dbname":"IntAct", "lblflag":false},
+        "xref_orthodb":{"dbname":"OrthoDB", "lblflag":false},
+        "xref_panther":{"dbname":"PANTHER", "lblflag":true},
+        "xref_pfam":{"dbname":"Pfam", "lblflag":true},
+        "xref_pro":{"dbname":"PRO", "lblflag":false},
+        "xref_glyconnect":{"dbname":"GlyConnect", "lblflag":false, "glycaninfile":"glyconnect.tsv"},
+        "xref_carbbank":{"dbname":"CarbBank", "lblflag":false, "glycaninfile":"carbbank.tsv"},
+        "xref_bcsdb":{"dbname":"BCSDB", "lblflag":false, "glycaninfile":"bcsdb.tsv"},
+        "xref_pdb":{"dbname":"PDB", "lblflag":false, "glycaninfile":"pdb.tsv"},
+        "xref_kegg":{"dbname":"KEGG", "lblflag":false, "glycaninfile":"kegg.tsv"},
+        "xref_pubchem":{"dbname":"PubChem", "lblflag":false, "glycaninfile":"pbch.tsv"},
+        "xref_glycomedb":{"dbname":"GlycomeDB", "lblflag":false, "glycaninfile":"gdb.tsv", "colind":1},
+        "xref_glyco":{"dbname":"Glyco", "lblflag":false, "glycaninfile":"gdb.tsv","colind":2},
+        "xref_uniprotkb":{"dbname":"UniProtKB", "lblflag":false, "glycaninfile":"unicarbkb.tsv"},
+        "xref_unicarbdb":{"dbname":"UniCarbDB", "lblflag":false, "glycaninfile":"unicarbdb.tsv"},
+        "xref_glycosciencesde":{"dbname":"Glycosciences.de", "lblflag":false, "glycaninfile":"glycosciencesde.tsv"},
+        "xref_cfg":{"dbname":"CFG", "lblflag":false, "glycaninfile":"cfg.tsv"},
+        "xref_unicarbkb":{"dbname":"UniCarbKB", "lblflag":false, "glycaninfile":"unicarbkb.tsv"}
+    }
+}

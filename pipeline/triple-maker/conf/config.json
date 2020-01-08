@@ -28,7 +28,7 @@
                         "dbhost":"127.0.0.1"
                         ,"dbname":"datasetviewer_tst"
                         ,"dbuserid":"dataservieweradmin"
-                        ,"dbpassword":"dataserviewerpass"
+                        ,"dbpassword":"somepasswordssssssssss"
                 }
                 ,"rootinfo":{
 			"baseurl":"/datasetviewer"
@@ -59,7 +59,7 @@
                         "dbhost":"localhost"
                         ,"dbname":"glygen_dev"
                         ,"dbuserid":"glygenadmin"
-                        ,"dbpassword":"glygenadminpass"
+                        ,"dbpassword":"somepass"
                 }
                 ,"rootinfo":{
                         "baseurl":"http://localhost/frontendcode/glygen"

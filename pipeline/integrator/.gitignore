@@ -1,0 +1,16 @@
+wrap-*
+*.sh
+logfile*
+archive-*/*
+
+unreviewed
+reviewed
+downloads
+alignments
+generated
+logs
+intermediate
+compiled
+tmp
+
+

@@ -13,7 +13,11 @@ __status__ = "Dev"
 def main():
 
     
-    sparql = SPARQLWrapper("http://localhost:8890/sparql")
+    #sparql = SPARQLWrapper("http://localhost:8890/sparql")
+    #sparql = SPARQLWrapper("https://glygen.org:8890/sparql")
+    sparql = SPARQLWrapper("https://sparql.glygen.org:8890/sparql")
+
+
 
     sparql.setQuery("""
         PREFIX gly: <http://purl.glygen.org/>

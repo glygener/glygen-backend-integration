@@ -11,17 +11,13 @@
         "fileglob":["glycan_subtype_tags.csv"],
         "indexlist":[0,1]
     }
-    ,"canon2hgncid":{
-        "fileglob":["human_protein_xref_hgnc.csv","mouse_protein_xref_mgi.csv"],
+    ,"residue2name":{
+        "fileglob":["monosaccharide_residue_name.csv"],
         "indexlist":[0,1]
     }
-    ,"canon2hgncname":{
-        "fileglob":["human_protein_xref_hgnc.csv", "mouse_protein_xref_mgi.csv"],
+    ,"residue2cid":{
+        "fileglob":["monosaccharide_residue_name.csv"],
         "indexlist":[0,2]
-    }                    
-    ,"canon2recname":{
-        "fileglob":["*_protein_recnames.csv"],
-        "indexlist":[0,1]
     }
 }
 

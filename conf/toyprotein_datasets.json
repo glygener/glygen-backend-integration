@@ -1,0 +1,27 @@
+{
+    "common":{
+	"protein":[
+            "masterlist"
+        ],
+        "proteoform":[
+        ]
+    }
+    ,"human":{
+        "protein":[
+            "disease"
+        ],
+        "proteoform":[
+        ]
+    }
+    ,"mouse":{
+        "protein":[
+        ],
+        "proteoform":[]
+    }
+    ,"rat":{
+        "protein":[
+        ],
+        "proteoform":[]
+    }
+}
+
