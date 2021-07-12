@@ -82,7 +82,15 @@ def main():
     config_obj = json.loads(open("../../conf/config-1.1.json", "r").read())
     path_obj  =  config_obj[config_obj["server"]]["pathinfo"]
 
-    species_obj = config_obj["speciesinfo"]
+    species_obj = {}
+    in_file = path_obj["misc"]+ "/species_info.csv"
+    libgly.load_species_info(species_obj, in_file)
+
+    species_list = []
+    for k in species_obj:
+        if k.isdigit() or species_obj[k]["is_reference"] == "no":
+            continue
+        species_list.append(k)
 
 
 
@@ -95,131 +103,90 @@ def main():
     seq_hash = {}
     isoform2canon = {}
     canon2recname = {}
-    file_list_obj = json.loads(open("../../conf/alignment_datasets.json", "r").read())
-    #file_list_obj = json.loads(open("../../conf/toy_protein_datasets.json", "r").read())
-
-
+    canon2submittedname = {}
     isoform2taxid = {}
-    for species in file_list_obj:
-        for sheet_name in file_list_obj[species]:
+    isoform2taxname = {}
+    canon_list = []
+    seqac2id = {}
+
+    sheet_list = ["masterlist", "recnames", "submittednames","info_uniprotkb"]
+    for sheet_name in sheet_list:
+        for species in species_list:
             in_file = data_dir + "/%s_protein_%s.csv" % (species, sheet_name)
-            if sheet_name not in work_book:
-                work_book[sheet_name] = {}
-            work_book[sheet_name]["fields"] = []
+            if os.path.isfile(in_file) == False:
+                continue
+            sheet_obj = {}
+            sheet_obj["fields"] = []
             print "loading ", species, sheet_name
-            libgly.load_sheet_as_dict(work_book[sheet_name], in_file, ",", "uniprotkb_canonical_ac")
-    
+            libgly.load_sheet_as_dict(sheet_obj, in_file, ",", "uniprotkb_canonical_ac")
             if sheet_name == "masterlist":
-                for canon in work_book[sheet_name]["data"]:
-                    isoform2taxid[canon] = species_obj[species]["taxid"]
-                    for row in work_book[sheet_name]["data"][canon]:
+                for canon in sheet_obj["data"]:
+                    canon_list.append(canon)
+                    isoform2taxid[canon] = species_obj[species]["tax_id"]
+                    isoform2taxname[canon] = species_obj[species]["long_name"]
+                    for row in sheet_obj["data"][canon]:
                         for isoform in [row[-2], row[-1]]:
                             isoform2canon[isoform] = canon
-                            isoform2taxid[isoform] = species_obj[species]["taxid"]
+                            isoform2taxid[isoform] = species_obj[species]["tax_id"]
+                            isoform2taxname[isoform] = species_obj[species]["long_name"]
+            elif sheet_name == "recnames":
+                for canon in sheet_obj["data"]:
+                    for row in sheet_obj["data"][canon]:
+                        canon2recname[canon] = row[0]
+            elif sheet_name == "submittednames":
+                for canon in sheet_obj["data"]:
+                    for row in sheet_obj["data"][canon]:
+                        canon2submittedname[canon] = row[0]
+            elif sheet_name == "info_uniprotkb":
+                for canon in sheet_obj["data"]:
+                    for row in sheet_obj["data"][canon]:
+                        seqac2id[canon] = row[sheet_obj["fields"].index("uniprotkb_id")]
 
-    sheet_name = "recnames"
-    for canon in work_book[sheet_name]["data"]:
-        for row in work_book[sheet_name]["data"][canon]:
-            canon2recname[canon] = row[0]
 
-    tax_info = {}
-    sheet_name = "protein_homolog_clusters"
-    work_book[sheet_name] = {}
+    sheet_name = "homolog_clusters"
+    homolog_clusters_df = {}
+    homolog_clusters_df["fields"] = []
     print "loading ", sheet_name
-    in_file = data_dir + "/%s.csv" % (sheet_name)
-    libgly.load_sheet_as_dict(work_book[sheet_name], in_file, ",", "uniprotkb_canonical_ac")
-    for canon in work_book[sheet_name]["data"]:
-        tmp_fl = work_book[sheet_name]["fields"]
-        for tmp_row in work_book[sheet_name]["data"][canon]:
-            tax_id = tmp_row[tmp_fl.index("tax_id")]
-            tax_name = tmp_row[tmp_fl.index("tax_name")]
-            tax_info[canon] = {"taxid": tax_id, "taxname":tax_name}
-
-
-
-
-    data_grid = {}
-    seen_row = {}
-    for sheet_name in work_book:
-        print "transforming", sheet_name
-        for canon in work_book[sheet_name]["data"]:
-            if canon not in data_grid:
-                data_grid[canon] = {}
-            if sheet_name not in data_grid[canon]:
-                data_grid[canon][sheet_name] = []
-            for row in work_book[sheet_name]["data"][canon]:
-                s = canon + sheet_name + json.dumps(row)
-                if s not in seen_row:
-                    data_grid[canon][sheet_name].append(row)
-                seen_row[s] = True
-
-
-    
-    aln_file_list = glob.glob("alignments/*.aln")
-
+    in_file = data_dir + "/protein_%s.csv" % (sheet_name)
+    libgly.load_sheet_as_dict(homolog_clusters_df, in_file, ",", "uniprotkb_canonical_ac")            
 
     members_dict = {}
-    isoform2uniprotkbid = {}
 
+    aln_file_list = glob.glob("alignments/*.aln")
     cls_count = 0
-    for canon in data_grid:
-            
-        #Extract uniprotkb_id
-        sheet_name = "info_uniprotkb"
-        tmp_fl = work_book[sheet_name]["fields"]
-        if sheet_name in data_grid[canon]:
-            tmp_row = data_grid[canon][sheet_name][0]
-            isoform2uniprotkbid[canon] = tmp_row[tmp_fl.index("uniprotkb_id")]
-        
-        sheet_name = "masterlist"
-        tmp_fl = work_book[sheet_name]["fields"]
-        if sheet_name in data_grid[canon]:
-            for tmp_row in data_grid[canon][sheet_name]:
-                isoform_one = tmp_row[tmp_fl.index("reviewed_isoforms")]
-                isoform_two = tmp_row[tmp_fl.index("unreviewed_isoforms")]
-                isoform2uniprotkbid[isoform_one] = isoform2uniprotkbid[canon]
-                isoform2uniprotkbid[isoform_two] = isoform2uniprotkbid[canon]
-        
-
-        #Extract isoform clustering
-        tmp_fl = work_book["masterlist"]["fields"]
-        if "masterlist" in  data_grid[canon]:
-            cls_id = "isoformset.uniprotkb.%s" % (canon)
-            aln_file = "alignments/isoformset.uniprotkb.%s.aln" % (canon)
-            if aln_file in aln_file_list:
-                for row in data_grid[canon]["masterlist"]:
-                    if cls_id not in members_dict:
-                        members_dict[cls_id] = []
-                        cls_count += 1
-                    if row[tmp_fl.index("reviewed_isoforms")] != "":
-                        members_dict[cls_id].append(row[tmp_fl.index("reviewed_isoforms")])
-                    if row[tmp_fl.index("unreviewed_isoforms")] != "":
-                        members_dict[cls_id].append(row[tmp_fl.index("unreviewed_isoforms")])
-        
-        #Extract homologset clusters      
-        tmp_fl = work_book["protein_homolog_clusters"]["fields"]
-        if "protein_homolog_clusters" in data_grid[canon]:
-            tmp_fl = work_book["protein_homolog_clusters"]["fields"]
-            for tmp_row in data_grid[canon]["protein_homolog_clusters"]:
-                homolog_cluster_id = tmp_row[tmp_fl.index("homolog_cluster_id")]
-                database = tmp_row[tmp_fl.index("database")]
-                cls_id = "homologset.%s.%s" % (database,homolog_cluster_id)
-                aln_file = "alignments/homologset.%s.%s.aln" % (database,homolog_cluster_id)
-                if aln_file in aln_file_list:
-                    if cls_id not in members_dict:
-                        members_dict[cls_id] = []
-                        cls_count += 1
-                    members_dict[cls_id].append(canon)
+    for aln_file in aln_file_list:
+        cls_id = aln_file.split("/")[-1].replace(".aln", "")
+        aln_hash = load_msa(aln_file)
+        if cls_id not in members_dict:
+            members_dict[cls_id] = []
+            cls_count += 1
+        for seq_ac in aln_hash.keys():
+            if seq_ac != "consensus":
+                members_dict[cls_id].append(seq_ac)
+                if cls_id.find("isoform") != -1:
+                    canon = isoform2canon[seq_ac]
+                    seqac2id[seq_ac] = seqac2id[canon] 
+    
 
     #Populate canon2cls
     canon2cls = {}
     for cls_id in members_dict:
-        for canon in members_dict[cls_id]:
-            if canon not in canon2cls:
-                canon2cls[canon] = []
-            canon2cls[canon].append(cls_id)
+        for seq_ac in members_dict[cls_id]:
+            if seq_ac not in canon_list:
+                continue
+            if seq_ac not in canon2cls:
+                canon2cls[seq_ac] = []
+            canon2cls[seq_ac].append(cls_id)
 
 
+    for canon in canon2cls:
+        obj = {"uniprot_canonical_ac":canon, "clusterlist":canon2cls[canon]}
+        obj = order_obj(obj)
+        #fout_obj[canon] = order_obj(obj)
+        out_file = path_obj["jsondbpath"] + "clusterdb/%s.json" % (canon)
+        with open(out_file, "w") as FW:
+            FW.write("%s\n" % (json.dumps(obj, indent=4)))
+        
 
     ts = datetime.datetime.now(pytz.timezone('US/Eastern')).strftime('%Y-%m-%d %H:%M:%S %Z%z')
     out_obj_list = []
@@ -239,17 +206,17 @@ def main():
                 seq_id, tax_id, tax_name = "", 0, ""
                 if seq_ac in isoform2taxid:
                     tax_id = isoform2taxid[seq_ac]
-                    tax_name = species_obj[str(tax_id)]["taxname"]
-                if seq_ac in isoform2uniprotkbid:
-                    seq_id = isoform2uniprotkbid[seq_ac]
+                    tax_name = species_obj[str(tax_id)]["long_name"]
+                if seq_ac in seqac2id:
+                    seq_id = seqac2id[seq_ac]
                 o = {"uniprot_ac":seq_ac, "uniprot_id":seq_id, "id":seq_ac, 
                         "name":name, "aln":aln_hash[seq_ac],
                         "tax_id":tax_id, "tax_name":tax_name}
                 out_obj["sequences"].append(o)
         n1, n2, n3, pid = 0, 0, 0, "0.0%"
         if "consensus" in aln_hash:
+            out_obj["consensus"] = aln_hash["consensus"]
             if aln_hash["consensus"].strip() != "":
-                out_obj["consensus"] = aln_hash["consensus"]
                 n1 = aln_hash["consensus"].count("*")
                 n2 = aln_hash["consensus"].count(":")
                 n3 = aln_hash["consensus"].count(".")
@@ -272,23 +239,10 @@ def main():
         with open(out_file, "w") as FW:
             FW.write("%s\n" % (json.dumps(obj, indent=4)))
         record_count += 1 
-        if record_count%1000 == 0:
-            print " ... filtered %s objects" % (record_count)
+        #if record_count%1000 == 0:
+        #    print " ... filtered %s objects" % (record_count)
     print " ... final created in: %s objects" % (record_count)
 
-    #out_file = path_obj["jsondbpath"] + "alignmentdb.json"
-    #with open(out_file, "w") as FW:
-    #    FW.write("%s\n" % (json.dumps(fout_obj, indent=4)))
-    #    print " ... final filtered in: %s objects" % (record_count)
-
-    #fout_obj = {}
-    for canon in canon2cls:
-        obj = {"uniprot_canonical_ac":canon, "clusterlist":canon2cls[canon]}
-        obj = order_obj(obj)
-        #fout_obj[canon] = order_obj(obj)
-        out_file = path_obj["jsondbpath"] + "clusterdb/%s.json" % (canon)
-        with open(out_file, "w") as FW:
-            FW.write("%s\n" % (json.dumps(obj, indent=4)))
 
 
 

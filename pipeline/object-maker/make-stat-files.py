@@ -36,13 +36,46 @@ def main():
             dbh = client[db_obj["mongodbname"]]
 
 
-            field_dict = {}
-            in_file = "generated/misc/field_names.csv"
-            libgly.load_sheet_as_dict(field_dict, in_file, ",", "field_name_current")
-
+            in_file = "generated/misc/field_names.json"
+            field_dict = json.loads(open(in_file,  "r").read())
             seen = {}
-            for doc in dbh["c_bco"].find({}):
+            seen_file = {}
+            doc_list = list(dbh["c_bco"].find({}))
+            for doc in doc_list:
+                if "bco_id" not in doc:
+                    continue
+                if "extension_domain" not in doc:
+                    continue
+                bco_id = doc["bco_id"]
+                status_list = []
 
+                if "dataset_categories" in doc["extension_domain"]:
+                    for o in doc["extension_domain"]["dataset_categories"]:
+                        if o["category_name"] == "status":
+                            status_list.append(o["category_value"].lower())
+                if "retired" in status_list:
+                    continue
+                if "io_domain" not in doc:
+                    continue
+                if "output_subdomain" not in doc["io_domain"]:
+                    continue
+                if len(doc["io_domain"]["output_subdomain"]) < 1:
+                    continue
+                if "uri" not in doc["io_domain"]["output_subdomain"][0]:
+                    continue
+                if "filename" not in doc["io_domain"]["output_subdomain"][0]["uri"]:
+                    continue
+                file_name = doc["io_domain"]["output_subdomain"][0]["uri"]["filename"]
+                if file_name == "":
+                    print "Empty io_domain for bco %s!" % (bco_id)
+                    continue
+                file_name = file_name.strip()
+                file_ext = file_name.split(".")[-1]
+                in_file = data_dir + "/" + file_name
+                if os.path.isfile(in_file) == True:
+                    seen_file[file_name] = True
+            
+            for doc in dbh["c_bco"].find({}):
                 if "bco_id" not in doc:
                     continue
                 bco_id = doc["bco_id"]
@@ -60,18 +93,13 @@ def main():
                 if "retired" in status_list:
                     continue
 
-
-                file_name = doc["io_domain"]["output_subdomain"][0]["uri"]["filename"]
-                if file_name == "":
-                    print "Empty io_domain for bco %s!" % (bco_id)
+                bco_idx = doc["bco_id"].split("/")[-1]
+                file_name = doc["io_domain"]["output_subdomain"][0]["uri"]["filename"].strip()
+                if file_name not in seen_file:
+                    print "** %s skipped because %s does not exist!" % (bco_idx,file_name)
                     continue
 
-                file_ext = file_name.split(".")[-1]
-                in_file = data_dir + "/" + file_name
-                if os.path.isfile(in_file) == False:
-                    print "** %s, %s does not exist!" % (bco_id.split("/")[-1],file_name)
-                    continue
-
+                
                 stat_file_name = ".".join(file_name.split(".")[0:-1]) + ".stat.csv"
                 stat_file = data_dir + "/" + stat_file_name
                 flag = False
@@ -96,7 +124,6 @@ def main():
                     print "added %s to %s" % (stat_file_name, doc["bco_id"])
 
 
-
                 if file_name not in seen:
                     seen[file_name] = True
                     print "%s, %s " % (doc["bco_id"].split("/")[-1],stat_file.split("/")[-1])
@@ -109,14 +136,15 @@ def main():
                         stat_dict = {}
                         for row in data_frame["data"]:
                             for j in xrange(0, len(row)):
-                                field = data_frame["fields"][j]
+                                field = data_frame["fields"][j] 
                                 if field not in stat_dict:
-                                    stat_dict[field] = []
-                                stat_dict[field].append(row[j])
+                                    stat_dict[field] = {}
+                                stat_dict[field][row[j]] = True
                         stat_obj = []
                         for field_name in stat_dict:
-                            n = len(sorted(set(stat_dict[field_name])))
-                            d = field_dict["data"][field_name][0][1] if field_name in field_dict["data"] else ""
+                            n = len(stat_dict[field_name].keys())
+                            d = field_dict[field_name]["description"] if field_name in field_dict else ""
+                            d = d.encode('ascii', 'ignore').decode('ascii')
                             row = [str(n), field_name,d]
                             FW.write("\"%s\"\n" % ("\",\"".join(row)))
                     elif file_ext == "fasta":

@@ -34,9 +34,15 @@ def main():
         path_obj  =  config_obj[config_obj["server"]]["pathinfo"]
         root_obj =  config_obj[config_obj["server"]]["rootinfo"]
         db_obj = config_obj[config_obj["server"]]["dbinfo"]
-        
-	client = MongoClient('mongodb://localhost:27017')
-	db = client[db_obj["dbname"]]
+       
+        client = pymongo.MongoClient('mongodb://localhost:27017',
+                username=db_obj["mongodbuser"],
+                password=db_obj["mongodbpassword"],
+                authSource=db_obj["mongodbname"],
+                authMechanism='SCRAM-SHA-1',
+                serverSelectionTimeoutMS=10000
+        )
+	db = client[db_obj["mongodbname"]]
         coll = options.coll
         query_obj = json.loads(options.query)
 

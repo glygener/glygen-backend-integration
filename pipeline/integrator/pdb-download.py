@@ -43,7 +43,6 @@ def main():
 
 
     config_obj = json.loads(open("conf/config.json", "r").read())
-    species_obj = config_obj["speciesinfo"]
  
     global path_obj
     path_obj = config_obj["pathinfo"]

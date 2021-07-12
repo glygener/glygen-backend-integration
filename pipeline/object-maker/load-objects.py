@@ -68,9 +68,39 @@ def main():
                 ,"primaryid":"glycanid"
                 ,"dbtype":1
             }
+            ,"c_motif":{
+                "dbfile":db_path + "motifdb/*.json"
+                ,"primaryid":"motifid"
+                ,"dbtype":1
+            }
             ,"c_protein":{
                 "dbfile":db_path + "proteindb/*.json"
                 ,"primaryid":"proteinid"
+                ,"dbtype":1
+            }
+            ,"c_site":{
+                "dbfile":db_path + "sitedb/*.json"
+                ,"primaryid":"siteid"
+                ,"dbtype":1
+            }
+            ,"c_species":{
+                "dbfile":db_path + "speciesdb/*.json"
+                ,"primaryid":"speciesid"
+                ,"dbtype":1
+            }
+            ,"c_idtrack":{
+                "dbfile":db_path + "idtrackdb/*.json"
+                ,"primaryid":"idtrackid"
+                ,"dbtype":1
+            }
+            ,"c_disease":{
+                "dbfile":db_path + "diseasedb/*.json"
+                ,"primaryid":"diseaseid"
+                ,"dbtype":1
+            }
+            ,"c_network":{
+                "dbfile":db_path + "networkdb/*.json"
+                ,"primaryid":"networkid"
                 ,"dbtype":1
             }
             ,"c_alignment":{
@@ -81,6 +111,22 @@ def main():
             ,"c_cluster":{
                 "dbfile":db_path + "clusterdb/*.json"
                 ,"primaryid":"clusterid"
+                ,"dbtype":1
+            }
+            ,"c_list":{
+                "dbfile":db_path + "listdb/*.json"
+                ,"primaryid":"listid"
+                ,"dbtype":1
+            }
+            ,"c_publication":{
+                "dbfile":db_path + "publicationdb/*.json"
+                ,"primaryid":"publicationid"
+                ,"dbtype":1
+                
+            }
+            ,"c_path":{
+                "dbfile":db_path + "pathdb/*.json"
+                ,"primaryid":"pathid"
                 ,"dbtype":1
             }
             ,"c_searchinit":{

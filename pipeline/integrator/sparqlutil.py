@@ -26,15 +26,16 @@ def load_do_mapping(data_grid):
     graph_uri = "http://sparql.glygen.org#disease"
     qs = prefixes
     qs += " SELECT"
-    qs += "?douri ?doval ?xrefval ?doname ?doaltname ?dodef "
+    qs += " ?douri ?doval ?xrefval ?doname ?doaltname ?dodef "
     qs += " FROM <%s>" % (graph_uri)
     qs += " WHERE {"
-    qs += "?douri oboinowl:id ?doval . "
-    qs += "?douri oboinowl:hasDbXref ?xrefval . "
-    qs += "?douri rdfs:label ?doname . "
-    qs += "?douri oboinowl:hasExactSynonym ?doaltname . "
-    qs += "?douri obo:IAO_0000115 ?dodef . "
+    qs += " ?douri oboinowl:id ?doval . "
+    qs += " ?douri rdfs:label ?doname . "
+    qs += " optional { ?douri oboinowl:hasDbXref ?xrefval . } "
+    qs += " optional { ?douri oboinowl:hasExactSynonym ?doaltname . } "
+    qs += " optional { ?douri obo:IAO_0000115 ?dodef . } "
     qs += "}"
+
 
     xobj_list_one = [
         {"prefix":"ICD10CM:", "mapname":"doid2icd10cm"},
@@ -60,7 +61,14 @@ def load_do_mapping(data_grid):
         total += n
         for result in results["results"]["bindings"]:
             do_id = result["doval"]["value"].replace("DOID:", "").strip()
-            xref_val = result["xrefval"]["value"].strip()
+            do_name = result["doname"]["value"].strip()
+            xref_val, do_altname, do_def = "", "", ""
+            if "xrefval" in result:
+                xref_val = result["xrefval"]["value"].strip()
+            if "doaltname" in result:
+                do_altname = result["doaltname"]["value"].strip()
+            if "dodef" in result:
+                do_def = result["dodef"]["value"].strip()
             for o in xobj_list_one:
                 if xref_val[0:len(o["prefix"])] == o["prefix"]:
                     xref_id = xref_val[len(o["prefix"]):]
@@ -74,25 +82,154 @@ def load_do_mapping(data_grid):
                     if do_id not in data_grid[o["mapname"]]:
                         data_grid[o["mapname"]][xref_id] = []
                     data_grid[o["mapname"]][xref_id].append(do_id)
-
-            do_name = result["doname"]["value"].strip()
             if do_id not in data_grid["doid2name"]:
                 data_grid["doid2name"][do_id] = []
             data_grid["doid2name"][do_id].append(do_name)
 
-            do_altname = result["doaltname"]["value"].strip()
             if do_id not in data_grid["doid2altname"]:
                 data_grid["doid2altname"][do_id] = []
             data_grid["doid2altname"][do_id].append(do_altname)
-
-            do_def = result["dodef"]["value"].strip()
+            
             if do_id not in data_grid["doid2def"]:
                 data_grid["doid2def"][do_id] = []
             data_grid["doid2def"][do_id].append(do_def)
 
 
+
+
+
     return
 
+def load_mutagen_annotation(data_grid, species):
+
+    graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
+    qs = prefixes
+    qs += " SELECT"
+    qs += " ?ac ?startpos ?endpos ?ecoid ?pmid ?comment ?subs "
+    qs += " FROM <%s>" % (graph_uri)
+    qs += " WHERE {"
+    qs += " ?ac up:annotation ?annuri . "
+    qs += " ?annuri rdf:type up:Mutagenesis_Annotation . "
+    qs += " ?annuri up:range ?rangeuri . "
+    qs += "?rangeuri faldo:begin ?beginuri . "
+    qs += "?rangeuri faldo:end ?enduri . "
+    qs += "?beginuri faldo:position ?startpos . "
+    qs += "?enduri faldo:position ?endpos . "
+    qs += " optional { ?annuri rdfs:comment ?comment . } "
+    qs += " optional { ?annuri up:substitution ?subs . } "
+    qs += " optional { "
+    qs += " ?annuri gly:attribution ?atturi . "
+    qs += " ?atturi up:evidence ?ecoid . "
+    qs += " ?atturi up:source ?pmid . "
+    qs += "}"
+    qs += "}"
+    
+    limit = 100000
+    total = 0
+    for i in xrange(0, 10000):
+        newqs = qs + " LIMIT %s OFFSET %s " % (limit,  i*limit)
+        sparql.setQuery(newqs)
+        results = sparql.query().convert()
+        n = len(results["results"]["bindings"])
+        if n == 0:
+            break
+        total += n
+        for result in results["results"]["bindings"]:
+            ac = result["ac"]["value"].split("/")[-1]
+            start_pos = int(result["startpos"]["value"])
+            end_pos = int(result["endpos"]["value"])
+            o = {"startpos":start_pos, "endpos":end_pos}
+            for k in ["ecoid", "pmid"]:
+                o[k] = result[k]["value"].split("/")[-1] if k in result else ""
+            for k in ["subs", "comment"]:
+                o[k] = result[k]["value"] if k in result else ""
+            if ac not in data_grid["mutagenann"]:
+                data_grid["mutagenann"][ac] = []
+            data_grid["mutagenann"][ac].append(o)
+
+
+    return 
+
+
+def load_mimid2disease_name(data_grid, species):
+
+    graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
+    qs = prefixes
+    qs += " SELECT"
+    qs += " ?duri ?mimuri ?dname "
+    qs += " FROM <%s>" % (graph_uri)
+    qs += " WHERE {"
+    qs += " ?duri rdfs:seeAlso ?mimuri . "
+    qs += " ?duri rdf:type up:Disease . "
+    qs += " ?duri skos:prefLabel ?dname . "
+    qs += "}"
+    
+
+    limit = 100000
+    total = 0
+    for i in xrange(0, 10000):
+        newqs = qs + " LIMIT %s OFFSET %s " % (limit,  i*limit)
+        sparql.setQuery(newqs)
+        results = sparql.query().convert()
+        n = len(results["results"]["bindings"])
+        if n == 0:
+            break
+        total += n
+        for result in results["results"]["bindings"]:
+            d_id = result["duri"]["value"].split("/")[-1]
+            mim_id = result["mimuri"]["value"].split("/")[-1]
+            d_name = result["dname"]["value"]
+            if mim_id not in data_grid["mimid2diseasename"]:
+                data_grid["mimid2diseasename"][mim_id] = d_name
+
+    return
+
+
+def load_signalp_annotation(data_grid, species):
+
+    graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
+    qs = prefixes
+    qs += " SELECT"
+    qs += " ?ac ?startpos ?endpos ?ecoid ?pmid "
+    qs += " FROM <%s>" % (graph_uri)
+    qs += " WHERE {"
+    qs += " ?ac up:annotation ?annuri . "
+    qs += " ?annuri rdf:type up:Signal_Peptide_Annotation . "
+    qs += " ?annuri up:range ?rangeuri . "
+    qs += "?rangeuri faldo:begin ?beginuri . "
+    qs += "?rangeuri faldo:end ?enduri . "
+    qs += "?beginuri faldo:position ?startpos . "
+    qs += "?enduri faldo:position ?endpos . "
+    qs += " optional { "
+    qs += " ?annuri gly:attribution ?atturi . "
+    qs += " ?atturi up:evidence ?ecoid . "
+    qs += " ?atturi up:source ?pmid . "
+    qs += "}"
+    qs += "}"
+
+    comment_hash = {}
+    limit = 100000
+    total = 0
+    for i in xrange(0, 10000):
+        newqs = qs + " LIMIT %s OFFSET %s " % (limit,  i*limit)
+        sparql.setQuery(newqs)
+        results = sparql.query().convert()
+        n = len(results["results"]["bindings"])
+        if n == 0:
+            break
+        total += n
+        for result in results["results"]["bindings"]:
+            ac = result["ac"]["value"].split("/")[-1]
+            start_pos = int(result["startpos"]["value"])
+            end_pos = int(result["endpos"]["value"])
+            o = {"startpos":start_pos, "endpos":end_pos}
+            for k in ["ecoid", "pmid"]:
+                o[k] = result[k]["value"].split("/")[-1] if k in result else ""
+            if ac not in data_grid["signalpann"]:
+                data_grid["signalpann"][ac] = []
+            data_grid["signalpann"][ac].append(o)            
+
+    return
 
 
 def load_go_annotation(data_grid, species):
@@ -100,7 +237,7 @@ def load_go_annotation(data_grid, species):
     graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
     qs = prefixes
     qs += " SELECT"
-    qs += " ?acuri ?gouri ?goterm ?gocaturi "
+    qs += " ?acuri ?gouri ?goterm ?gocaturi ?ecouri ?pmiduri "
     qs += " FROM <%s>" % (graph_uri)
     qs += " WHERE {"
     qs += "?acuri up:classifiedWith ?goannuri . "
@@ -109,7 +246,13 @@ def load_go_annotation(data_grid, species):
     qs += "?gouri rdf:type owl:Class . "
     qs += "?gouri rdfs:label ?goterm . "
     qs += "?gouri gly:goClassification ?gocaturi . "
+    qs += " optional { "
+    qs += " ?goannuri gly:attribution ?atturi . "
+    qs += " ?atturi up:evidence ?ecouri . "
+    qs += " ?atturi up:source ?pmiduri . "
     qs += "}"
+    qs += "}"
+
 
     limit = 100000
     total = 0
@@ -126,9 +269,15 @@ def load_go_annotation(data_grid, species):
             go_id = result["gouri"]["value"].split("/")[-1].strip()
             go_cat = result["gocaturi"]["value"].split("/")[-1].strip()
             go_term = result["goterm"]["value"]
+            ecoid, pmid = "", ""
+            if "ecouri" in result:
+                ecoid = result["ecouri"]["value"].split("/")[-1]
+            if "pmiduri" in result:
+                pmid = result["pmiduri"]["value"].split("/")[-1]
             if ac not in data_grid["goann"]:
                 data_grid["goann"][ac] = []
-            o = {"goid":go_id, "goterm":go_term, "gocat":go_cat}
+            o = {"goid":go_id, "goterm":go_term, "gocat":go_cat, 
+                    "ecoid":ecoid,"pmid":pmid}
             data_grid["goann"][ac].append(o)
 
 
@@ -252,6 +401,42 @@ def load_citelist(data_grid, species):
                                      
 
 
+def load_gene_names(data_grid, species):
+
+    graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
+    qs = prefixes
+    qs += " SELECT"
+    qs += "?ac ?preflabel ?altlabel ?orfname "
+    qs += " FROM <%s>" % (graph_uri)
+    qs += " WHERE {"
+    qs += " ?ac rdf:type up:Protein . "
+    qs += " ?ac up:encodedBy ?geneuri . "
+    qs += " optional { ?geneuri skos:prefLabel ?preflabel . } "
+    qs += " optional { ?geneuri skos:altLabel ?altlabel . } "
+    qs += " optional { ?geneuri up:orfName ?orfname . } "
+    qs += "}"
+
+    limit = 100000
+    total = 0
+    for i in xrange(0, 10000):
+        newqs = qs + " LIMIT %s OFFSET %s " % (limit,  i*limit)
+        sparql.setQuery(newqs)
+        results = sparql.query().convert()
+        n = len(results["results"]["bindings"])
+        if n == 0:
+            break
+        total += n
+        for result in results["results"]["bindings"]:
+            ac = result["ac"]["value"].split("/")[-1].split("#")[0]
+            o = {}
+            for k in ["preflabel", "altlabel", "orfname"]:
+                o[k] = result[k]["value"].split("/")[-1] if k in result else ""
+            if ac not in data_grid["genenames"]:
+                data_grid["genenames"][ac] = []
+            data_grid["genenames"][ac].append(o)
+
+    return
+
 
 def load_genename(data_grid, species):
 
@@ -332,7 +517,7 @@ def load_enzymelist_one(data_grid, species):
             break
         total += n
         for result in results["results"]["bindings"]:
-            ac = result["acuri"]["value"].split("/")[-1]
+            ac = result["acuri"]["value"].split("/")[-1].split("#")[0]
             ec = result["ecuri"]["value"].split("/")[-1]
             activity = ec2activity[ec] if ec in ec2activity else ""
             o =  {"ec":ec, "activity":activity}
@@ -383,14 +568,16 @@ def load_interaction(data_grid, species):
     graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
     qs = prefixes
     qs += " SELECT"
-    qs += "?acuri ?puri ?experiments ?puniprotac ?pgenename ?puniprotid ?ptaxid "
+    qs += "?puri ?puniprotac"
     qs += " FROM <%s>" % (graph_uri)
     qs += " WHERE {"
-    qs += "?acuri up:interaction ?intacturi . "
+    #qs += "?acuri up:interaction ?intacturi . "
     qs += "?intacturi up:participant ?puri . "
-    qs += "?intacturi rdf:type up:Self_Interaction . "
+    qs += "?puri owl:sameAs ?puniprotac . "
+    #qs += "?intacturi rdf:type up:Self_Interaction . "
     qs += "}"
-    
+   
+
     limit = 100000
     total = 0
     for i in xrange(0, 10000):
@@ -402,16 +589,22 @@ def load_interaction(data_grid, species):
             break
         total += n
         for result in results["results"]["bindings"]:
-            ac = result["acuri"]["value"].split("/")[-1]
             pintactac = result["puri"]["value"].split("/")[-1]
-            if ac not in ac2intact:
-                ac2intact[ac] = []
-            ac2intact[ac].append(pintactac)
-    
+            puniprotac = result["puniprotac"]["value"].split("/")[-1]
+            puniprotac_part = puniprotac.split("-")[0]
+            if puniprotac_part in data_grid["ac2canon"]:
+                if data_grid["ac2canon"][puniprotac_part] == puniprotac:
+                    puniprotac = puniprotac_part
+            if puniprotac not in ac2intact:
+                ac2intact[puniprotac] = []
+            if pintactac not in ac2intact[puniprotac]:
+                ac2intact[puniprotac].append(pintactac)
+   
+
     graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
     qs = prefixes
     qs += " SELECT"
-    qs += "?acuri ?puri ?experiments ?puniprotac ?pgenename ?puniprotid ?ptaxid "
+    qs += "?acuri ?puri ?intacturi ?experiments ?puniprotac ?pgenename ?puniprotid ?ptaxid "
     qs += " FROM <%s>" % (graph_uri)
     qs += " WHERE {"
     qs += "?acuri up:interaction ?intacturi . "
@@ -575,45 +768,23 @@ def load_locusinfo(data_grid, species):
 
 
 
-def load_recnames(data_grid, species):
+def load_protein_names(data_grid, species, predicate_type):
 
     graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
     qs = prefixes
     qs += " SELECT"
-    qs += "?ac ?fullname"
+    qs += "?ac ?nameuri ?fullname ?shortname ?ecname "
     qs += " FROM <%s>" % (graph_uri)
     qs += " WHERE {"
-    qs += " ?ac up:recommendedName ?nameuri ."
+    qs += " ?ac %s ?nameuri ." % (predicate_type)
+    #qs += " ?ac rdf:type up:Protein ."
     qs += " ?nameuri up:fullName ?fullname ."
-    qs += " ?ac rdf:type up:Protein ."
+    qs += " optional { ?nameuri up:shortName ?shortname . } "
+    qs += " optional { ?nameuri up:ecName ?ecname .  } "
     qs += "}"
 
-    limit = 100000
-    total = 0
-    for i in xrange(0, 10000):
-        newqs = qs + " LIMIT %s OFFSET %s " % (limit,  i*limit)
-        sparql.setQuery(newqs)
-        results = sparql.query().convert()
-        n = len(results["results"]["bindings"])
-        if n == 0:
-            break
-        total += n
-        for result in results["results"]["bindings"]:
-            ac = result["ac"]["value"].split("/")[-1]
-            full_name = result["fullname"]["value"]
-            data_grid["recnames"][ac] = {"fullname":full_name}
-  
-
-    qs = prefixes
-    qs += " SELECT"
-    qs += "?ac ?shortname"
-    qs += " FROM <%s>" % (graph_uri)
-    qs += " WHERE {"
-    qs += " ?ac up:recommendedName ?nameuri ."
-    qs += " ?nameuri up:shortName ?shortname ."
-    qs += " ?ac rdf:type up:Protein ."
-    qs += "}"
     
+
     limit = 100000
     total = 0
     for i in xrange(0, 10000):
@@ -625,83 +796,19 @@ def load_recnames(data_grid, species):
             break
         total += n
         for result in results["results"]["bindings"]:
-            ac = result["ac"]["value"].split("/")[-1]
-            short_name = result["shortname"]["value"]
-            if ac in data_grid["recnames"]:
-                data_grid["recnames"][ac]["shortname"] = short_name
-            else:
-                data_grid["recnames"][ac] = {"fullname":"", "shortname":short_name}
+            ac = result["ac"]["value"].split("/")[-1].split("#")[0]
+            o = {}
+            for k in ["fullname", "shortname", "ecname"]:
+                #o[k] = result[k]["value"].split("/")[-1] if k in result else ""
+                o[k] = result[k]["value"] if k in result else ""
+            if ac not in data_grid["proteinnames"]:
+                data_grid["proteinnames"][ac] = []
+            data_grid["proteinnames"][ac].append(o)
+
 
     return
 
 
-
-def load_altnames(data_grid, species):
-
-    graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
-    qs = prefixes
-    qs += " SELECT"
-    qs += "?ac ?nameuri ?fullname"
-    qs += " FROM <%s>" % (graph_uri)
-    qs += " WHERE {"
-    qs += " ?ac up:alternativeName ?nameuri ."
-    qs += " ?nameuri up:fullName ?fullname ."
-    qs += " ?ac rdf:type up:Protein ."
-    qs += "}"
-
-    limit = 100000
-    total = 0
-    for i in xrange(0, 10000):
-        newqs = qs + " LIMIT %s OFFSET %s " % (limit,  i*limit)
-        sparql.setQuery(newqs)
-        results = sparql.query().convert()
-        n = len(results["results"]["bindings"])
-        if n == 0:
-            break
-        total += n
-        for result in results["results"]["bindings"]:
-            ac = result["ac"]["value"].split("/")[-1]
-            name_uri = result["nameuri"]["value"].split("/")[-1]
-            full_name = result["fullname"]["value"]
-            if ac not in data_grid["altnames"]:
-                data_grid["altnames"][ac] = {}
-            if name_uri not in data_grid["altnames"][ac]:
-                data_grid["altnames"][ac][name_uri] = {"fullname":full_name}
-
-
-    qs = prefixes
-    qs += " SELECT"
-    qs += "?ac ?shortname ?nameuri"
-    qs += " FROM <%s>" % (graph_uri)
-    qs += " WHERE {"
-    qs += " ?ac up:alternativeName ?nameuri ."
-    qs += " ?nameuri up:shortName ?shortname ."
-    qs += " ?ac rdf:type up:Protein ."
-    qs += "}"
-
-    limit = 100000
-    total = 0
-    for i in xrange(0, 10000):
-        newqs = qs + " LIMIT %s OFFSET %s " % (limit,  i*limit)
-        sparql.setQuery(newqs)
-        results = sparql.query().convert()
-        n = len(results["results"]["bindings"])
-        if n == 0:
-            break
-        total += n
-        for result in results["results"]["bindings"]:
-            ac = result["ac"]["value"].split("/")[-1]
-            name_uri = result["nameuri"]["value"].split("/")[-1]
-            short_name = result["shortname"]["value"]
-            if ac not in data_grid["altnames"]:
-                data_grid["altnames"][ac] = {}
-            if name_uri in data_grid["altnames"][ac]:
-                data_grid["altnames"][ac][name_uri]["shortname"] = short_name
-            else:
-                data_grid["altnames"][ac][name_uri] = {"fullname":"", "shortname":short_name}
-
-
-    return
 
 
 
@@ -716,16 +823,18 @@ def load_glycosylation_sites(data_grid, species):
     qs += " FROM <%s>" % (graph_uri)
     qs += " WHERE {"
     qs += " ?ac up:annotation ?annuri . "
-    qs += " ?annuri rdfs:comment ?comment . "
     qs += " ?annuri rdf:type up:Glycosylation_Annotation . "
-    qs += " ?annuri up:attribution ?atturi . "
+    qs += " ?annuri rdfs:comment ?comment . "
+    qs += " ?annuri up:range ?rangeuri . "
+    qs += " ?rangeuri faldo:begin ?beginuri . "
+    qs += " ?rangeuri faldo:end ?enduri . "
+    qs += " ?beginuri faldo:position ?startpos . "
+    qs += " ?enduri faldo:position ?endpos . "
+    qs += " optional { "
+    qs += " ?annuri gly:attribution ?atturi . "
     qs += " ?atturi up:source ?citationuri . "
     qs += " ?atturi up:evidence ?evidenceuri . "
-    qs += " ?annuri up:range ?rangeuri . "
-    qs += "?rangeuri faldo:begin ?beginuri . "
-    qs += "?rangeuri faldo:end ?enduri . "
-    qs += "?beginuri faldo:position ?startpos . "
-    qs += "?enduri faldo:position ?endpos . "
+    qs += "}"
     qs += "}"
 
     
@@ -770,79 +879,41 @@ def load_glycosylation_sites(data_grid, species):
             break
         total += n
         for result in results["results"]["bindings"]:
-            car_id = result["annuri"]["value"].split("/")[-1]
-            car_id = car_id if car_id[0:4] == "CAR_" else ""
             ac = result["ac"]["value"].split("/")[-1]
-            comment = result["comment"]["value"]
-            evidence = result["evidenceuri"]["value"].split("/")[-1]
-            gly_type = comment.strip().split(" ")[0]
-            saccharide = comment.strip().split(" ")[1]
-            saccharide = saccharide.replace("(", "").replace(")", "")
+            car_id =  result["annuri"]["value"].split("/")[-1]
+            car_id = car_id if car_id[0:4] == "CAR_" else ""
+            comment = result["comment"]["value"] if "comment" in result else ""
             start_pos = result["startpos"]["value"]
             end_pos = result["endpos"]["value"]
-            source_one = result["citationuri"]["value"].split("/")[-2]
+            car_id = car_id if car_id[0:4] == "CAR_" else ""
+            evidence, source_one, source_two = "", "", ""
+            if "evidenceuri" in result:
+                evidence = result["evidenceuri"]["value"].split("/")[-1]
+            if "citationuri" in result:
+                source_one = result["citationuri"]["value"].split("/")[-2]
+                source_two = result["citationuri"]["value"].split("/")[-1]
+            gly_type, saccharide = "", ""
+            if comment != "":
+                gly_type = comment.strip().split(" ")[0]
+                saccharide = comment.strip().split(" ")[1]
+                saccharide = saccharide.replace("(", "").replace(")", "")
             source_one = source_dict[source_one] if source_one in source_dict else source_one
-            source_two = result["citationuri"]["value"].split("/")[-1]
             for aa in aa_dict:
                 if comment.find(aa.lower()) != -1:
                     aa = aa_dict[aa]
-                    row = [ac, gly_type, saccharide, aa, start_pos]
+                    row = [ac, gly_type, saccharide, aa, start_pos, comment]
                     combo_id = ",".join(row)
                     if combo_id not in ev_dict:
                         ev_dict[combo_id] = []
                     ev_dict[combo_id].append([source_one, source_two,evidence, car_id])
 
-
-
-
-    graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
-    qs = prefixes
-    qs += " SELECT"
-    qs += " ?ac ?comment ?annuri ?startpos ?endpos "
-    qs += " FROM <%s>" % (graph_uri)
-    qs += " WHERE {"
-    qs += " ?ac up:annotation ?annuri . "
-    qs += " ?annuri rdfs:comment ?comment . "
-    qs += " ?annuri rdf:type up:Glycosylation_Annotation . "
-    qs += " ?annuri up:range ?rangeuri . "
-    qs += "?rangeuri faldo:begin ?beginuri . "
-    qs += "?rangeuri faldo:end ?enduri . "
-    qs += "?beginuri faldo:position ?startpos . "
-    qs += "?enduri faldo:position ?endpos . "
-    qs += "}"
-
-    limit = 100000
-    total = 0
-    for i in xrange(0, 10000):
-        newqs = qs + " LIMIT %s OFFSET %s " % (limit,  i*limit)
-        sparql.setQuery(newqs)
-        results = sparql.query().convert()
-        n = len(results["results"]["bindings"])
-        if n == 0:
-            break
-        total += n
-        for result in results["results"]["bindings"]:
-            ac = result["ac"]["value"].split("/")[-1]
-            car_id = result["annuri"]["value"].split("/")[-1]
-            car_id = car_id if car_id[0:4] == "CAR_" else ""
-            comment = result["comment"]["value"]
-            gly_type = comment.strip().split(" ")[0]
-            saccharide = comment.strip().split(" ")[1]
-            saccharide = saccharide.replace("(", "").replace(")", "")
-            start_pos = result["startpos"]["value"]
-            end_pos = result["endpos"]["value"]
-            for aa in aa_dict:
-                if comment.find(aa.lower()) != -1:
-                    aa = aa_dict[aa]
-                    row_one = [ac, gly_type, saccharide, aa, start_pos, comment]
-                    combo_id = ",".join(row_one)
-                    if combo_id in ev_dict:
-                        for row_two in ev_dict[combo_id]:
-                            data_grid["glycosylation"].append(row_one + row_two)
-                    else:
-                        data_grid["glycosylation"].append(row_one + ["", "", car_id, ""])
-
+    for combo_id in ev_dict:
+        row_one = combo_id.split(",")
+        for row_two in ev_dict[combo_id]:
+            data_grid["glycosylation"].append(row_one + row_two)
     return
+
+
 
 
 
@@ -858,7 +929,7 @@ def load_phosphorylation_sites(data_grid, species):
     qs += " ?ac up:annotation ?annuri . "
     qs += " ?annuri rdfs:comment ?comment . "
     qs += " ?annuri rdf:type up:Modified_Residue_Annotation . "
-    qs += " ?annuri up:attribution ?atturi . "
+    qs += " ?annuri gly:attribution ?atturi . "
     qs += " ?atturi up:source ?citationuri . "
     qs += " ?atturi up:evidence ?evidenceuri . "
     qs += " ?annuri up:range ?rangeuri . "
@@ -915,6 +986,7 @@ def load_phosphorylation_sites(data_grid, species):
             evidence = result["evidenceuri"]["value"].split("/")[-1]
             if comment[0:7] != "Phospho":
                 continue
+        
 
             gly_type = comment.strip().split(" ")[0]
             #saccharide = comment.strip().split(" ")[1]
@@ -935,11 +1007,11 @@ def load_phosphorylation_sites(data_grid, species):
                     ev_dict[combo_id].append([source_one, source_two,evidence])
 
 
-
+    
     graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
     qs = prefixes
     qs += " SELECT"
-    qs += " ?ac ?comment ?annuri ?startpos ?endpos "
+    qs += " ?ac ?comment ?annuri ?startpos ?endpos ?isoform "
     qs += " FROM <%s>" % (graph_uri)
     qs += " WHERE {"
     qs += " ?ac up:annotation ?annuri . "
@@ -950,6 +1022,7 @@ def load_phosphorylation_sites(data_grid, species):
     qs += "?rangeuri faldo:end ?enduri . "
     qs += "?beginuri faldo:position ?startpos . "
     qs += "?enduri faldo:position ?endpos . "
+    qs += " optional { ?annuri up:sequence ?isoform . } "
     qs += "}"
 
     limit = 100000
@@ -965,16 +1038,23 @@ def load_phosphorylation_sites(data_grid, species):
         for result in results["results"]["bindings"]:
             ac = result["ac"]["value"].split("/")[-1]
             comment = result["comment"]["value"]
+            isoform = result["isoform"]["value"] if "isoform" in result else ""
             if comment[0:7] != "Phospho":
+                continue
+
+            #ignore annotation given to isoforms
+            if isoform != "":
                 continue
             kinase_list = [""]
             if comment.find("; by") != -1:
-                kinase_list += comment.split("; by")[1].replace(",", "").split(" ")
-                for w in ["and", "by", "autocatalysis", "or"]:
+                for gene_word in comment.split("; by")[1].replace(",", "").split(" "):
+                    if gene_word.strip() != "":
+                        kinase_list += [gene_word.replace(";", "")]
+                for w in ["", "kinase", "form", "vitro", 
+                        "and", "in", "by", "autocatalysis", "or"]:
                     if w in kinase_list:
                         kinase_list.remove(w)
-            
-            gly_type = comment.strip().split(" ")[0]
+            gly_type = comment.strip().split(" ")[0].replace(";", "")
             #saccharide = comment.strip().split(" ")[1]
             #saccharide = saccharide.replace("(", "").replace(")", "")
             start_pos = result["startpos"]["value"]
@@ -986,12 +1066,18 @@ def load_phosphorylation_sites(data_grid, species):
                     combo_id = ",".join(row_one)
                     if combo_id in ev_dict:
                         for row_two in ev_dict[combo_id]:
-                            for gene_name in kinase_list:
-                                data_grid["phosphorylation"].append(row_one + [gene_name] + row_two)
+                            row_three = row_one + [comment] + row_two
+                            data_grid["phosphorylation"].append(row_three)
+                            #for gene_name in kinase_list:
+                            #    row_three = row_one + [gene_name] + row_two
+                            #    data_grid["phosphorylation"].append(row_three)
                     else:
-                        for gene_name in kinase_list:
-                            data_grid["phosphorylation"].append(row_one + [gene_name, "", "", ""])
-
+                        row_three = row_one + [comment, "", "", ""]
+                        data_grid["phosphorylation"].append(row_three)
+                        #for gene_name in kinase_list:
+                        #    row_three = row_one + [gene_name, "", "", ""]
+                        #    data_grid["phosphorylation"].append(row_three)
+    
     return
 
 
@@ -1041,43 +1127,17 @@ def load_ptm_annotation(data_grid, species):
     graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
     qs = prefixes
     qs += " SELECT"
-    qs += " ?ac ?comment ?annuri"
+    qs += " ?ac ?startpos ?endpos ?ecoid ?pmid ?comment "
     qs += " FROM <%s>" % (graph_uri)
     qs += " WHERE {"
     qs += " ?ac up:annotation ?annuri . "
-    qs += " ?annuri rdfs:comment ?comment . "
     qs += " ?annuri rdf:type up:PTM_Annotation . "
-    qs += "}"
-
-    comment_hash = {}
-    limit = 100000
-    total = 0
-    for i in xrange(0, 10000):
-        newqs = qs + " LIMIT %s OFFSET %s " % (limit,  i*limit)
-        sparql.setQuery(newqs)
-        results = sparql.query().convert()
-        n = len(results["results"]["bindings"])
-        if n == 0:
-            break
-        total += n
-        for result in results["results"]["bindings"]:
-            ac = result["ac"]["value"].split("/")[-1]
-            comment = result["comment"]["value"]
-            ann_id = result["annuri"]["value"].split("/")[-1]
-            comment_hash[ann_id] = comment
-
-
-    graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
-    qs = prefixes
-    qs += " SELECT"
-    qs += " ?ac ?ecouri ?pmiduri ?annuri "
-    qs += " FROM <%s>" % (graph_uri)
-    qs += " WHERE {"
-    qs += " ?ac up:annotation ?annuri . "
+    qs += " optional { ?annuri rdfs:comment ?comment . } "
+    qs += " optional { "
     qs += " ?annuri gly:attribution ?atturi . "
-    qs += " ?atturi up:evidence ?ecouri . "
-    qs += " ?atturi up:source ?pmiduri . "
-    qs += " ?annuri rdf:type up:PTM_Annotation . "
+    qs += " ?atturi up:evidence ?ecoid . "
+    qs += " ?atturi up:source ?pmid . "
+    qs += "}"
     qs += "}"
 
     limit = 100000
@@ -1092,15 +1152,19 @@ def load_ptm_annotation(data_grid, species):
         total += n
         for result in results["results"]["bindings"]:
             ac = result["ac"]["value"].split("/")[-1]
-            ecoid = result["ecouri"]["value"].split("/")[-1]
-            pmid = result["pmiduri"]["value"].split("/")[-1]
-            ann_id = result["annuri"]["value"].split("/")[-1]
-            if ann_id in comment_hash:
-                if ac not in data_grid["ptmann"]:
-                    data_grid["ptmann"][ac] = []
-                o = {"pmid":pmid, "ecoid":ecoid, "ann":comment_hash[ann_id]}
-                data_grid["ptmann"][ac].append(o)
+            o = {}
+            for k in ["ecoid", "pmid"]:
+                o[k] = result[k]["value"].split("/")[-1] if k in result else ""
+            for k in ["comment"]:
+                o[k] = result[k]["value"] if k in result else ""
+            for k in ["startpos", "endpos"]:
+                o[k] = int(result[k]["value"]) if k in result else -1
 
+            if ac not in data_grid["ptmann"]:
+                data_grid["ptmann"][ac] = []
+            data_grid["ptmann"][ac].append(o)
+    
+      
 
     return
 
@@ -1111,7 +1175,7 @@ def load_site_annotation(data_grid, species, ann_type):
     graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
     qs = prefixes
     qs += " SELECT"
-    qs += " ?ac ?comment ?annuri ?startpos ?endpos "
+    qs += " ?ac ?comment ?annuri ?startpos ?endpos ?subs ?pmid ?ecoid "
     qs += " FROM <%s>" % (graph_uri)
     qs += " WHERE {"
     qs += " ?ac up:annotation ?annuri . "
@@ -1122,6 +1186,14 @@ def load_site_annotation(data_grid, species, ann_type):
     qs += "?rangeuri faldo:end ?enduri . "
     qs += "?beginuri faldo:position ?startpos . "
     qs += "?enduri faldo:position ?endpos . "
+    qs += " optional { ?annuri up:substitution ?subs . } "
+    qs += " optional { "
+    qs += " ?annuri gly:attribution ?atturi . "
+    qs += " ?atturi up:evidence ?ecoid . "
+    qs += " ?atturi up:source ?pmid . "
+    qs += "}"
+ 
+    
     qs += "}"
 
     ev_dict = {}
@@ -1141,6 +1213,10 @@ def load_site_annotation(data_grid, species, ann_type):
             start_pos = result["startpos"]["value"]
             end_pos = result["endpos"]["value"]
             o = {"anntype":ann_type, "start":start_pos, "end":end_pos, "ann":comment}
+            for k in ["ecoid", "pmid"]:
+                o[k] = result[k]["value"].split("/")[-1] if k in result else ""
+            for k in ["subs"]:
+                o[k] = result[k]["value"] if k in result else ""
             if ac not in data_grid["siteann"]:
                 data_grid["siteann"][ac] = []
             data_grid["siteann"][ac].append(o)
@@ -1354,8 +1430,134 @@ def load_participants_reactome(sheet_obj, species_list):
     return
 
 
+def load_enzymes_rhea(row_list, species):
 
-def load_reactions_reactome(sheet_obj, species_list):
+
+    graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
+    qs = prefixes
+    qs += " SELECT"
+    qs += " ?proteinuri ?activityuri ?reactionuri "
+    qs += " FROM <%s>" % (graph_uri)
+    qs += " WHERE {"
+    qs += " ?proteinuri up:annotation ?annotationuri ."
+    qs += " ?annotationuri up:catalyticActivity ?activityuri ."
+    qs += " ?annotationuri rdf:type up:Catalytic_Activity_Annotation ."
+    qs += " ?activityuri up:catalyzedReaction ?reactionuri ."
+    qs += " ?activityuri rdf:type up:Catalytic_Activity."
+    qs += "}"
+    limit = 100000
+    total = 0
+    for i in xrange(0, 10000):
+        newqs = qs + " LIMIT %s OFFSET %s " % (limit,  i*limit)
+        sparql.setQuery(newqs)
+        results = sparql.query().convert()
+        n = len(results["results"]["bindings"])
+        if n == 0:
+            break
+        total += n
+        for result in results["results"]["bindings"]:
+            uniprotkb_ac = result["proteinuri"]["value"].split("/")[-1]
+            reaction_id = result["reactionuri"]["value"].split("/")[-1]
+            row_list.append([uniprotkb_ac, reaction_id])
+    return
+
+
+def load_enzymes_reactome(row_list, species):
+
+    graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
+    qs = prefixes
+    qs += " SELECT"
+    qs += " ?proteinuri ?reactionuri ?enzymeuri"
+    qs += " FROM <%s>" % (graph_uri)
+    qs += " WHERE {"
+    qs += " ?proteinuri up:enzyme ?enzymeuri ."
+    qs += " ?proteinuri up:annotation ?reactionuri ."
+    qs += " ?reactionuri rdf:type gly:Reaction_Annotation ."
+    qs += "}"
+    limit = 100000
+    total = 0
+    for i in xrange(0, 10000):
+        newqs = qs + " LIMIT %s OFFSET %s " % (limit,  i*limit)
+        sparql.setQuery(newqs)
+        results = sparql.query().convert()
+        n = len(results["results"]["bindings"])
+        if n == 0:
+            break
+        total += n
+        for result in results["results"]["bindings"]:
+            uniprotkb_ac = result["proteinuri"]["value"].split("/")[-1]
+            reaction_id = result["reactionuri"]["value"].split("/")[-1]
+            row_list.append([uniprotkb_ac, reaction_id])
+
+    return
+
+
+def load_pathways_reactome(sheet_obj, species):
+
+
+    pathway2reaction = {}
+    graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
+    qs = prefixes
+    qs += " SELECT"
+    qs += " ?reactionuri ?reactionname ?pathwayuri"
+    qs += " FROM <%s>" % (graph_uri)
+    qs += " WHERE {"
+    qs += " ?reactionuri gly:pathway ?pathwayuri ."
+    qs += " ?reactionuri rdf:type gly:Reaction_Annotation ."
+    qs += "}"
+    limit = 100000
+    total = 0
+    for i in xrange(0, 10000):
+        newqs = qs + " LIMIT %s OFFSET %s " % (limit,  i*limit)
+        sparql.setQuery(newqs)
+        results = sparql.query().convert()
+        n = len(results["results"]["bindings"])
+        if n == 0:
+            break
+        total += n
+        for result in results["results"]["bindings"]:
+            pathway_id = result["pathwayuri"]["value"].split("/")[-1]
+            reaction_id = result["reactionuri"]["value"].split("/")[-1]
+            if pathway_id not in pathway2reaction:
+                pathway2reaction[pathway_id] = []
+            if reaction_id not in pathway2reaction[pathway_id]:
+                pathway2reaction[pathway_id].append(reaction_id)
+
+
+
+    graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
+    qs = prefixes
+    qs += " SELECT"
+    qs += " ?pathwayuri ?pathwayname ?pathwaysummary"
+    qs += " FROM <%s>" % (graph_uri)
+    qs += " WHERE {"
+    qs += " ?pathwayuri gly:pathwayName ?pathwayname ."
+    qs += " ?pathwayuri gly:pathwaySummary ?pathwaysummary ."
+    qs += "}"
+
+    limit = 100000
+    total = 0
+    for i in xrange(0, 10000):
+        newqs = qs + " LIMIT %s OFFSET %s " % (limit,  i*limit)
+        sparql.setQuery(newqs)
+        results = sparql.query().convert()
+        n = len(results["results"]["bindings"])
+        if n == 0:
+            break
+        total += n
+        for result in results["results"]["bindings"]:
+            pathway_id = result["pathwayuri"]["value"].split("/")[-1]
+            pathway_name = result["pathwayname"]["value"]
+            pathway_summary = result["pathwaysummary"]["value"]
+            reactions = ""
+            if pathway_id in pathway2reaction:
+                reactions = ",".join(pathway2reaction[pathway_id])
+            sheet_obj.append([pathway_id, pathway_name, pathway_summary, reactions])
+
+    return
+
+
+def load_reactions(sheet_obj, species_list):
 
 
     reaction2location = {}
@@ -1416,18 +1618,22 @@ def load_reactions_reactome(sheet_obj, species_list):
     
 
 
+
+
     seen = {}
     for species in species_list:
         graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
         qs = prefixes
         qs += " SELECT"
-        qs += " ?reactionuri ?reactionname ?pathwayuri"
+        qs += " ?reactionuri ?reactionname ?pathwayuri ?reactionsummary ?reactiondb ?reactionequation"
         qs += " FROM <%s>" % (graph_uri)
         qs += " WHERE {"
-        qs += " ?reactionuri gly:rxnName ?reactionname ."
-        qs += " ?reactionuri gly:pathway ?pathwayuri ." 
         qs += " ?reactionuri rdf:type gly:Reaction_Annotation ."
-        
+        qs += " optional { ?reactionuri gly:reactionDatabase ?reactiondb . } "
+        qs += " optional { ?reactionuri gly:rxnName ?reactionname . } "
+        qs += " optional { ?reactionuri gly:rxnSummary ?reactionsummary . } "
+        qs += " optional { ?reactionuri gly:pathway ?pathwayuri . } "
+        qs += " optional { ?reactionuri gly:equation ?reactionequation . } "
         qs += "}"
 
         limit = 100000
@@ -1441,17 +1647,29 @@ def load_reactions_reactome(sheet_obj, species_list):
                 break
             total += n
             for result in results["results"]["bindings"]:
-                pathway_id = result["pathwayuri"]["value"].split("/")[-1]
                 reaction_id = result["reactionuri"]["value"].split("/")[-1]
-                reaction_name = result["reactionname"]["value"]
+                reaction_name, reaction_summary, reaction_db,reaction_equation,pathway_id = "","","","",""
+                if "reactiondb" in result:
+                    reaction_db = result["reactiondb"]["value"].split("/")[-1]
+                if "reactionname" in result:
+                    reaction_name = result["reactionname"]["value"]
+                if "reactionequation" in result:
+                    reaction_equation = result["reactionequation"]["value"]
+
+                if "pathwayuri" in result:
+                    pathway_id = result["pathwayuri"]["value"].split("/")[-1]
+                if "reactionsummary" in result:
+                    reaction_summary = result["reactionsummary"]["value"]
                 location = ", ".join(reaction2location[reaction_id]) if reaction_id in reaction2location else ""
+
                 pmid = ", ".join(reaction2pmid[reaction_id]) if reaction_id in reaction2pmid else ""
                 combo_id = "%s %s" % (reaction_id, pmid)
                 if combo_id not in seen:
                     seen[combo_id] = True
                     o = {"reactionid":reaction_id, "reactionname":reaction_name, 
-                            "cellularlocation":cellular_location, "pmid":pmid, 
-                            "pathwayid":pathway_id}
+                            "cellularlocation":location, "pmid":pmid, 
+                            "pathwayid":pathway_id, "summary":reaction_summary,
+                            "equation":reaction_equation, "source":reaction_db}
                     sheet_obj["reactions"].append(o)
 
     return
@@ -1471,6 +1689,7 @@ def load_ac2xref(sheet_obj, species, xref_obj):
     qs += " ?uri rdfs:comment ?label ." if xref_obj["lblflag"] == True else ""
     qs += " ?ac rdf:type up:Protein ."
     qs += "}"
+    
 
     if xref_obj["dbname"] == "Reactome":
         qs = prefixes
@@ -1484,7 +1703,19 @@ def load_ac2xref(sheet_obj, species, xref_obj):
         qs += " ?reactionuri gly:pathway ?uri ."
         qs += " ?uri gly:pathwayName ?label ."
         qs += "}"
-
+    elif xref_obj["dbname"] == "Rhea":
+        qs = prefixes
+        qs += " SELECT"
+        qs += " ?ac ?uri ?label "
+        qs += " FROM <%s>" % (graph_uri)
+        qs += " WHERE {"
+        qs += " ?ac up:annotation ?annotationuri ."
+        qs += " ?annotationuri up:catalyticActivity ?activityuri ."
+        qs += " ?annotationuri rdf:type up:Catalytic_Activity_Annotation ."
+        qs += " ?activityuri up:catalyzedReaction ?uri ."
+        qs += " ?activityuri rdf:type up:Catalytic_Activity."
+        qs += " ?uri gly:equation ?label ."
+        qs += "}"
 
 
     limit = 100000
@@ -1544,6 +1775,42 @@ def load_ac2kegg(data_grid, species):
                 data_grid["kegg"][ac] = []
             data_grid["kegg"][ac].append({"id":kegg_id, "label":""})
 
+def load_protein_existence(data_grid, species):
+
+    graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
+    qs = prefixes
+    qs += " SELECT"
+    qs += " ?ac ?pe"
+    qs += " FROM <%s>" % (graph_uri)
+    qs += " WHERE {"
+    qs += " ?ac up:existence ?pe ."
+    qs += " ?ac rdf:type up:Protein ."
+    qs += "}"
+
+    pe_dict = {
+        "Evidence_at_Protein_Level_Existence":1
+        ,"Evidence_at_Transcript_Level_Existence":2
+        ,"Inferred_from_Homology_Existence":3
+        ,"Predicted_Existence":4
+        ,"Uncertain_Existence":5
+    }
+
+    limit = 100000
+    total = 0
+    for i in xrange(0, 10000):
+        newqs = qs + " LIMIT %s OFFSET %s " % (limit,  i*limit)
+        sparql.setQuery(newqs)
+        results = sparql.query().convert()
+        n = len(results["results"]["bindings"])
+        if n == 0:
+            break
+        total += n
+        for result in results["results"]["bindings"]:
+            ac = result["ac"]["value"].split("/")[-1]
+            pe = result["pe"]["value"].split("/")[-1]
+            data_grid["pe"][ac] = pe_dict[pe] if pe in pe_dict else ""
+    return
+
 
 
 def load_proteinid(data_grid, species):
@@ -1551,7 +1818,7 @@ def load_proteinid(data_grid, species):
     graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
     qs = prefixes
     qs += " SELECT"
-    qs += "?ac ?proteinid"
+    qs += "?ac ?proteinid "
     qs += " FROM <%s>" % (graph_uri)
     qs += " WHERE {"
     qs += " ?ac up:mnemonic ?proteinid ."
@@ -1642,10 +1909,11 @@ def load_isoformseq(data_grid, species):
     graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
     qs = prefixes
     qs += " SELECT"
-    qs += "?isoform ?seq"
+    qs += "?isoform ?seq ?ver"
     qs += " FROM <%s>" % (graph_uri)
     qs += " WHERE {"
     qs += " ?isoform rdf:value ?seq ."
+    qs += " ?isoform up:version ?ver ."
     qs += " ?isoform rdf:type up:Simple_Sequence ."
     qs += "}"
 
@@ -1662,7 +1930,9 @@ def load_isoformseq(data_grid, species):
         for result in results["results"]["bindings"]:
             isoform = result["isoform"]["value"].split("/")[-1]
             isoform_seq = result["seq"]["value"].split("/")[-1].strip()
+            isoform_ver = result["ver"]["value"].split("/")[-1].strip()
             data_grid["isoformseq"][isoform] = isoform_seq
+            data_grid["isoformver"][isoform] = isoform_ver
 
 
     return
@@ -1702,7 +1972,6 @@ def load_test(data_grid, species):
             ac = result["ac"]["value"].split("/")[-1]
             gene_uri = result["geneuri"]["value"].split("/")[-1].split("#")[-1]
             gene_name = result["genename"]["value"].split("/")[-1]
-            print gene_name, ac, gene_uri
 
     return
 
