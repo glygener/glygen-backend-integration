@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "bco_editor", line 87, in search_objects
+    bco_str_id = "000000"[0:6-len(str(bco_id))] + str(in_json["queryvalue"])
+UnboundLocalError: local variable 'bco_id' referenced before assignment

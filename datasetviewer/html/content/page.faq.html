@@ -1,143 +1,872 @@
-<br>
+﻿<br />
 <table style="width:98%;margin-left:1%;">
-<tr><td colspan=3><b>Frequently asked questions for GlyGen</b></td></tr>
-<tr>
-<td width=10>1.</td>
-<td class=faqquestion id=question_1>
-What does protein-centric data include?
-</td>
-</tr>
-<tr>
-<td weight=bold id=answer_1 class=faqanswer colspan=2>
-Protein-centric data include data types and information that is about some particular protein coding gene, or that can be mapped to the canonical protein sequence representing that gene. Examples include pathways, Gene Ontology, localization, etc.
-</td>
-</tr>
 
-<tr>
-<td>2.</td>
-<td id=question_2 class=faqquestion>
-What does proteoform-centric data include?</td>
-</tr>
-<tr>
-<td id=answer_2 class=faqanswer colspan=2>
-Proteoform-centric data include data types and information that is about some particular proteoform or that pertains to a specific amino acid site. A proteoform is the specific protein product of a gene; multiple proteoforms might arise due to differences in genetic variation, alternative splicing or translation start site selection, or post-translational modifications.
-</td>
-</tr>
+    <tr> <td colspan="3" align="left"><hr><br><h5>Protein FAQs</h5></td></tr>
 
-<tr>
-<td>3.</td>
-<td id=question_3 class=faqquestion>
-What does glycan-centric data include?
-</td>
-</tr>
-<tr>
-<td id=answer_3 class=faqanswer colspan=2>
-Glycan-centric data include data types and information that is about specific glycans.
-</td>
-</tr>
+  <tr>
+    <td>1.</td>
+    <td id="question_1" class="faqquestion">
+      What does protein-centric data include?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_1" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          Protein-centric data include data types and information about a
+          particular protein-coding gene, or that can be mapped to the canonical
+          protein sequence representing that gene. Examples include pathways,
+          Gene Ontology, localization, etc.
+        </li>
+      </ul>
+    </td>
+  </tr>
 
-<tr>
-<td>4.</td>
-<td id=question_4 class=faqquestion>
-Is it possible to have the same data or information mapped to proteins, glycans and proteoforms?
-</td>
-</tr>
-<tr>
-<td id=answer_4 class=faqanswer colspan=2>
-Yes.
-</td>
-</tr>
+  <tr>
+    <td>2.</td>
+    <td id="question_2" class="faqquestion">
+      What is a UniProtKB canonical accession?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_2" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          UniProtKB canonical accession is an accession assigned to the protein
+          isoform chosen to be the canonical sequence to which all positional
+          annotation refers in the UniProtKB entry page.
+        </li>
+        <li class=faqanswer>
+          UniProtKB represents different isoforms of the same protein by
+          assigning it a protein accession followed by the number of the
+          isoform.
+          <ul class=faqanswer>
+            <li class=faqanswer>
+              For example: for protein accession P38398, different isoforms are
+              represented as P38398-1, P38398-2, P38398-3, P38398-4, etc. where
+              P38398-1 is the chosen canonical accession.
+            </li>
+          </ul>
+        </li>
+        <li class=faqanswer>
+          UniProtKB uses specific criteria for choosing the canonical sequence
+          for the entry. To know more about canonical isoforms and the canonical
+          choosing criteria, refer to the UniProtKB
+          <a href="https://www.uniprot.org/help/canonical_and_isoforms">help</a>
+          page.
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>3.</td>
+    <td id="question_3" class="faqquestion">
+      How do I find a UniProtKB accession for my protein?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_3" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          UniProtKB accession is used to represent a protein by UniProtKB
+          database. Visit <a href="https://uniprot.org">UniProtKB</a> for
+          additional information.
+        </li>
+        <li class=faqanswer>
+          In GlyGen, you can find the UniProtKB accession for your protein
+          either by providing a protein name, protein sequence, gene name or
+          even by adding different cross-references (e.g. RefSeq accession, KEGG
+          etc.):
+          <ul class=faqanswer>
+            <li class=faqanswer>
+              Go to the <b>EXPLORE</b> tab on GlyGen the home page and select
+              <b>Protein Search</b>.
+            </li>
+            <li class=faqanswer>
+              Select <b>Advanced Search</b> and add the desired input by
+              selecting the appropriate box.
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>4.</td>
+    <td id="question_4" class="faqquestion">
+      How can I search all the glycosylation sites present on my protein?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_4" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          Go to the <b>EXPLORE</b> tab on the GlyGen home page and select
+          <b>Protein Search</b>.
+        </li>
+        <li class=faqanswer>
+          Under <b>Simple Search</b>, select <b>Protein</b> from the
+          <b>Any category</b> dropbox and add the UniProtKB accession.
+        </li>
+        <li class=faqanswer>Click on <b>Search</b>.</li>
+        <li class=faqanswer>
+          Click on the UniProtKB accession from the list page and navigate to
+          the
+          <b>Glycosylation</b> section.
+        </li>
+        <li class=faqanswer>
+          You can also view glycosylation sites through our highlighting feature in the <b>Sequence</b> section.
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr ><td colspan="3" align="left"><br><h5>Proteoform FAQs</h5></td></tr>
+
+  <tr>
+    <td>1.</td>
+    <td id="question_5" class="faqquestion">
+      What is a proteoform?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_5" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          The term "proteoform" designates, "all of the different molecular
+          forms in which the protein product of a single gene can be found,
+          including changes due to genetic variations, alternatively spliced RNA
+          transcripts and post-translational modifications," (Smith et al. Nat
+          Methods. 2013 Mar;10(3):186-7. PMID:23443629).
+        </li>
+        <li class=faqanswer>
+          A protein can have many different glycosylated proteoforms that differ
+          from each other in a number of ways: the site(s) that are
+          glycosylated, the glycan structure at each modified site, and the
+          presence of any other modifications. For example, the figure below
+          shows several different glycosylated proteoforms of the sex hormone
+          binding globulin (SHBG) that are represented in the <a href="https://proconsortium.org/">Protein Ontology (PRO) </a>. These forms have an OGalNAc modification at Thr36 and one of
+          several different N4GlcNAc modifications at Asn380 or Asn396.
+        </li>
+        <img
+          src="/content/proteoform_faq5.png"
+        />
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>2.</td>
+    <td id="question_6" class="faqquestion">
+      What does proteoform-centric data include?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_6" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          Proteoform-centric data include data types and information that is
+          about some particular proteoform or that pertains to a specific amino
+          acid site. A proteoform is the specific protein product of a gene;
+          multiple proteoforms might arise due to differences in genetic
+          variation, alternative splicing or translation start site selection,
+          or post-translational modifications.
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>3.</td>
+    <td id="question_7" class="faqquestion">
+      Why is the representation of proteoforms useful?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_7" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          Many aspects of protein function-activity, sub-cellular localization,
+          and interaction partners, for example, are influenced by the precise
+          combination of modifications on the protein. When proteins are
+          represented and annotated in knowledge resources without regard to
+          modification state, these distinctions can be lost. In contrast,
+          proteoform-level representation makes it possible to associate
+          annotation unambiguously with the most relevant protein form. For
+          example, the figure below shows the relative abundances of 12
+          different glycosylated proteoforms of SHBG (six different glycan
+          structures at two different sites, Asn380 and Asn396). This abundance
+          of information is associated with the corresponding proteoform terms
+          in <a href="https://proconsortium.org/">Protein Ontology (PRO) </a>.
+        </li>
+        <img
+          src="/content/proteoform_faq7.png"
+        />
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>4.</td>
+    <td id="question_8" class="faqquestion">
+      Given that proteins can have many potential glycosylation sites and there
+      are many different glycan forms, the number of possible proteoforms
+      quickly becomes unmanageably large. How can we possibly represent
+      proteoforms through PRO ID's in a useful way?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_8" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          The policy of the <a href="https://proconsortium.org/">Protein Ontology (PRO)</a> is to only represent proteoforms
+          that have been experimentally observed. For example, if glycosylation
+          is observed on two different sites, each of the singly modified forms
+          can be represented in PRO; however, the proteoform with glycosylation
+          on both sites will not be represented unless there is solid
+          experimental evidence for its existence. In this way, the number of
+          proteoforms per protein does not grow too large, and the forms
+          represented are those that are of highest interest to biologists.
+        </li>
+      </ul>
+    </td>
+  </tr>
 
 
-<tr>
-<td>5.</td>
-<td id=question_5 class=faqquestion>
-Is it possible to have datasets that are neither protein, proteoform or glycan centric?
-</td>
-</tr>
-<tr>
-<td id=answer_5 class=faqanswer colspan=2>
-Yes, such datasets are listed under "other" category.
-</td>
-</tr>
+  <tr ><td colspan="3" align="left"><br><h5>Glycan FAQs</h5></td></tr>
 
-<tr>
-<td>6.</td>
-<td id=question_6 class=faqquestion>
-What is the format of the readme files?
-</td>
-</tr>
-<tr>
-<td id=answer_6 class=faqanswer colspan=2>
-All readme files follow the BioCompute specifications. Technical specifications can be found at <a href="https://hive.biochemistry.gwu.edu/htscsrs/">https://osf.io/r6s4u/.</a>
-</td>
-</tr>
+  <tr>
+    <td>1.</td>
+    <td id="question_9" class="faqquestion">
+      What does glycan-centric data include?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_9" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          Glycan-centric data include data types and information such as motifs,
+          type/sub-type, mass, cross-references to different databases (UniCarbKB, ChEBI etc.) and
+          sequences (e.g. IUPAC, WURCS, GlycoCT, etc.).
+        </li>
+      </ul>
+    </td>
+  </tr>
 
-<tr>
-<td>7.</td>
-<td id=question_7 class=faqquestion>
-How is data integrated into GlyGen?
-</td>
-</tr>
-<tr>
-<td id=answer_7 class=faqanswer colspan=2>
-<img src = "/content/data.png">
-</td>
-</tr>
+  <tr>
+    <td>2.</td>
+    <td id="question_10" class="faqquestion">
+      How do I find a GlyTouCan accession for my glycan composition?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_10" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          If the glycan composition is known, users can utilize the GlyGen <a href="https://www.glygen.org/glycan_search.html#composition_search"> composition search </a> to search for a glycan within the GlyGen set which captures ~30% of the entire GlyTouCan collection. 
+          To search for a GlyTouCan accession against the entire GlyTouCan , use the <a href="https://glycosmos.gitlab.io/compo2wurcsui/"> compo2wurcs tool </a> developed by <a href="https://glycosmos.org/"> GlyCosmos </a>. 		  
+        </li>
+      </ul>
+    </td>
+  </tr>
 
-<tr>
-<td>8.</td>
-<td id=question_8 class=faqquestion>
-What licence does GlyGen use?
-</td>
-</tr>
-<tr>
-<td id=answer_8 class=faqanswer colspan=2>
-The GlyGen is licensed under CC BY 4.0. You are free to share (copy and redistribute the material in any medium or format) and adapt (remix, transform, and build upon the material) for any purpose, even commercially.<br> You must give appropriate credit (by referring to GlyGen for the whole resource or Object ID for individual datasets).<br> You may do so in any reasonable manner, but not in any way that suggests the licensor endorses you or your use.<br>
-Datasets made available through GlyGen includes archival of versions. We recommend authors to use Creative Commons Attribution licence (CC BY) for all versions when they share their datasets with GlyGen.<br> This means that users of GlyGen are entitled to use, reproduce, disseminate or display these datasets provided the original authors and GlyGen is attributed.
-</td>
-</tr>
+  <tr>
+    <td>3.</td>
+    <td id="question_11" class="faqquestion">
+      How do I find a GlyTouCan accession for my glycan structure?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_11" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          You can use one of the following ways to get a GlyTouCan accession:
+          <ul class=faqanswer>
+            <li class=faqanswer>
+              Visiting the GlyTouCan database:
+              <ol>
+                <li class=faqanswer>
+                  Through GlyTouCan <a href="https://glytoucan.org/Structures/graphical"> Graphic Input
+                  </a>
+                  <ol type="a">
+                    <li class=faqanswer>
+                      Draw the glycan structure and provide linkage information
+                      (if known).
+                    </li>
+                    <li class=faqanswer>Click <b>SEARCH</b></li>
+                  </ol>
+                </li>
+                <li class=faqanswer>
+                  Through GlyTouCan
+                  <a href="https://glytoucan.org/Structures/structureSearch">
+                    Text Input
+                  </a>
+                  <ol type="a">
+                    <li class=faqanswer>
+                      Add either the WURCS or GlycoCT sequence and click
+                      <b>SEARCH</b>
+                    </li>
+                  </ol>
+                </li>
+              </ol>
+            </li>
+            <li class=faqanswer>
+              Downloading the Glycan Builder 2 Application:
+              <ol>
+                <li class=faqanswer>
+                  Download the Glycan Builder 2 application from
+                  <a href="http://www.rings.t.soka.ac.jp/downloads.html"
+                    >here</a>.
+                  <ul class=faqanswer>
+                    <li class=faqanswer>
+                      In the application, click the <b>VIEW</b> tab and enable
+                      <b>SNFG Notation</b> (Symbol Nomenclature for Glycans).
+                    </li>
+                    <li class=faqanswer>
+                      Draw the structure by choosing the appropriate
+                      monosaccharides and add linkage information (if known).
+                    </li>
+                    <li class=faqanswer>
+                      Once the structure is complete, click the
+                      <b>STRUCTURE</b> tab, then select
+                      <b><i>get string from structure</i></b
+                      >, and then from the drop-down menu select either the
+                      <b><i>glycoct_condensed</i></b> or
+                      <b><i>WURCS</i></b> format.
+                    </li>
+                    <li class=faqanswer>
+                      Copy and paste the <b><i>glycoct_condensed</i></b> or
+                      <b><i>WURCS</i></b> value into the GlyTouCan Text Input
+                      search and click on the <b>SEARCH</b> button.
+                    </li>
+                  </ul>
+                </li>
+              </ol>
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </td>
+  </tr>
 
-<tr>
-<td>9.</td>
-<td id=question_9 class=faqquestion>
-What is a proteoform?
-</td>
-</tr>
-<tr>
-<td id=answer_9 class=faqanswer colspan=2>
-The term "proteoform" designates "all of the different molecular forms in which the protein product of a single gene can be found, including changes due to genetic variations, alternatively spliced RNA transcripts and post-translational modifications." (Smith et al. Nat Methods. 2013 Mar;10(3):186-7. PMID:23443629).
-<br>A protein can have many different glycosolyated proteoforms that differ from each other in a number of ways: the site(s) that are glycosylated, the glycan structure at each modified site, and the presence of any other modifications. For example, the figure below shows several different glycosylated proteoforms of the sex hormone binding globulin (SHBG) that are represented in the Protein Ontology (PRO). These forms have an OGalNAc modification at Thr36 and one of several different N4GlcNAc modifications at Asn380 or Asn396.
-<br><img src = "/content/proteoform_faq9.png">
-</td>
-</tr>
+  <tr>
+    <td>4.</td>
+    <td id="question_12" class="faqquestion">
+      How can I convert my glycan sequence to different formats (e.g IUPAC, WURCS, GlycoCT, LinearCode, etc.)?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_12" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          <b>GlycanFormatConverter </b>(PMID:<a href="https://pubmed.ncbi.nlm.nih.gov/30535258">30535258</a>) allows users to convert glycan sequences from different import formats (such as IUPAC-Condensed, IUPAC-Extended, GlycoCT, KCF, LinearCode, WURCS) to the desired export formats (such as IUPAC-Short,IUPAC-Condensed,IUPAC-Extended,GlycoCT,WURCS,GlycanWeb). 
+        </li>
+		<li class=faqanswer>
+          Please see the below example (IUPAC-extended to WURCS) for step-by-step instructions on using the tool or click <a href=" https://github.com/glycoinfo/GlycanFormatConverter">here</a> to visit the <b>GlycanFormatConverter</b> GitHub repository. 
+        </li>
+		<li class=faqanswer>
+          Go to GlycanFormatConverter <a href="https://test.api.gfc.glycosmos.org/swagger-ui.html#!/converter-controller">Swagger</a> and select <b>iupacextended2wurcs</b>
+        </li>
+        <li class=faqanswer>
+          In the <b>import</b> field add your IUPAC string and specify <b>"txt"/"json"</b> in the format field.
+        </li>
+		<li class=faqanswer>
+          Once you select <b>Try it out</b>, you can see the WURCS string under <b>Response Body</b>.
+        </li>
+      </ul>
+    </td>
+  </tr>
 
-<tr>
-<td>10.</td>
-<td id=question_10 class=faqquestion>
-Why is the representation of proteoforms useful?
-</td>
-</tr>
-<tr>
-<td id=answer_10 class=faqanswer colspan=2>
-Many aspects of protein function-activity, sub-cellular localization, and interaction partners, for example-are influenced by the precise combination of modifications on the protein. When proteins are represented and annotated in knowledge resources without regard to modification state, these distinctions can be lost. In contrast, proteoform-level representation makes it possible to associate annotation unambiguously with the most relevant protein form. For example, the figure below shows the relative abundances of 12 different glycosylated proteoforms of SHBG (six different glycan structures at two different sites, Asn380 and Asn396). This abundance information was associated with the corresponding proteoform terms in PRO (Protein Ontology).
-<br><img src = "/content/proteoform_faq10.png">
-</td>
-</tr>
+  <tr>
+    <td>5.</td>
+    <td id="question_13" class="faqquestion">
+      How can I search all the glycans present on my protein?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_13" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          Go to the <b>EXPLORE</b> tab on the GlyGen home page and select
+          <b>Glycan Search</b>.
+        </li>
+        <li class=faqanswer>
+          Under <b>Simple Search</b>, select Protein from <b>Any category</b> add the UniProtKB accession in the search
+          box.
+        </li>
+        <li class=faqanswer>Click on <b>Search</b>.</li>
+      </ul>
+    </td>
+  </tr>
 
-<tr>
-<td>11.</td>
-<td id=question_11 class=faqquestion>
-Given that proteins can have many potential glycosylation sites and there are many different glycan forms, the number of possible proteoforms quickly becomes unmanageably large. <br>How can we possibly represent proteoforms in a useful way?
-</td>
-</tr>
-<tr>
-<td id=answer_11 class=faqanswer colspan=2>
-The policy of the Protein Ontology is to only represent proteoforms that have been experimentally observed. For example, if glycosylation is observed on two different sites, each of the singly modified forms can be represented in PRO; however, the proteoform with glycosylation on both sites will not be represented unless there is solid experimental evidence for its existence. In this way, the number of proteoforms per protein does not grow too large, and the forms represented are those that are of highest interest to biologists.
-</td>
-</tr>
+  <tr><td colspan="3" align="left"><br><h5>General FAQs</h5></td></tr>
+
+  <tr>
+    <td>1.</td>
+    <td id="question_14" class="faqquestion">
+      Does GlyGen have a tutorial on how to use the site?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_14" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          Tutorials for specific searches can be accessed through the <b>EXPLORE</b> tab on GlyGen home page.
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>2.</td>
+    <td id="question_15" class="faqquestion">
+      What are the different resources integrated into GlyGen?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_15" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          Click
+          <a href="http://www.glygen.org/license.html">here</a> to understand
+          which resources are integrated into GlyGen.
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>3.</td>
+    <td id="question_16" class="faqquestion">
+      What licence does GlyGen use?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_16" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          GlyGen’s data is licensed under CC BY 4.0. You are free to share (copy
+          and redistribute the material in any medium or format) and adapt
+          (remix, transform, and build upon the material) for any purpose, even
+          commercially as long as you give appropriate credit and attribution.
+          To learn about CC BY 4.0, click
+          <a href="https://creativecommons.org/licenses/by/4.0/"
+            >here</a>.
+        </li>
+        <li class=faqanswer>
+          GlyGen’s source code and data processing scripts are licenced under
+          GNU General Public License v3.0 which gives the user freedom to use
+          the software for any purpose, to change the software to suit the
+          needs, to share the software with your friends and neighbors, and also
+          the freedom to share the changes a user makes. To learn about GNU GPL
+          V3.0, visit the GNU
+          <a href="https://www.gnu.org/licenses/gpl-3.0.en.html">licenses</a>
+          page.
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>4.</td>
+    <td id="question_17" class="faqquestion">
+      What is GlyGen’s policy regarding copyright and database distribution?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_17" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          You must give appropriate credit to GlyGen (by referring to GlyGen for
+          the whole resource or Object ID for individual datasets).
+        </li>
+        <li class=faqanswer>
+          You may do so in any reasonable manner, but not in any way that
+          suggests the licensor endorses you or your use.
+        </li>
+        <li class=faqanswer>
+          Datasets made available through GlyGen include archival of versions.
+          We recommend authors to use Creative Commons Attribution licence (CC
+          BY) for all versions when they share their datasets with GlyGen.
+        </li>
+        <li class=faqanswer>
+          This means that users of GlyGen are entitled to use, reproduce,
+          disseminate or display these datasets provided the original authors
+          and GlyGen are attributed.
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>5.</td>
+    <td id="question_18" class="faqquestion">
+      How can I access the GlyGen Data?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_18" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          GlyGen data can be accessed through the <b>DATA</b> tab on the GlyGen
+          homepage or directly via GlyGen
+          <a href="https://data.glygen.org/">data</a> page. Data can also be be
+          accessed by querying SPARQL
+          <a href="https://sparql.glygen.org/">endpoint</a> (coming in future)
+          or through GlyGen Web Service
+          <a href="https://api.glygen.org"> API </a>
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>6.</td>
+    <td id="question_19" class="faqquestion">
+      How can I download GlyGen data?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_19" class="faqanswer" colspan="2">
+      <a name="data_download"></a>
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          <i>
+            <u>
+              To download a list of results (with one or more filters) or to
+              download data specific to an individual record:
+            </u>
+          </i>
+          <ul class=faqanswer>
+            <li class=faqanswer>
+              Go to the <b>EXPLORE</b> tab on the GlyGen home page and select a
+              category for your search (e.g. protein, glycan, glycoprotein).
+            </li>
+            <li class=faqanswer>
+              Use the <b>Simple Search</b> option to search data based on a
+              single filter.
+              <ul class=faqanswer>
+                <li class=faqanswer>
+                  For example, select <b>Protein</b> from <b>Any category</b> to search data only by
+                  UniProtKB accession.
+                </li>
+              </ul>
+            </li>
+            <li class=faqanswer>
+              Use the <b>Advanced Search</b> option to apply additional filters
+              to your search.
+            </li>
+            <li class=faqanswer>
+              Click on the <b>Search</b> button to navigate to the list page and
+              click the <b>download</b> button in the top right corner to access
+              the results.
+            </li>
+            <li class=faqanswer>
+              To download an individual record, select a record from the list
+              page and click the <b>download</b> button.
+            </li>
+          </ul>
+        </li>
+        <li class=faqanswer>
+          <i><u>To download the entire set of data:</u></i>
+        </li>
+        <ul class=faqanswer>
+          <li class=faqanswer>Go to the <b>DATA</b> tab on the GlyGen homepage.</li>
+          <li class=faqanswer>
+            Select <b>view more</b> on the desired data object and select the
+            <b>download</b> button.
+          </li>
+          <li class=faqanswer>
+            To know more about GlyGen data objects go to General FAQ 7.
+          </li>
+        </ul>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>7.</td>
+    <td id="question_20" class="faqquestion">
+      What is a GlyGen data object?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_20" class="faqanswer" colspan="2">
+      <a name="data_object"></a>
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          GlyGen data is organized into individual data objects which are
+          assigned a unique GlyGen ID (e.g.
+          <a href="https://data.glygen.org/GLYDS000001">GLYDS000001</a>).
+        </li>
+        <li class=faqanswer>
+          Each GlyGen data object can be accessed through the <b>DATA</b> tab on
+          the GlyGen home or directly via the Glygen
+          <a href="https://data.glygen.org/">data</a> page.
+        </li>
+        <li class=faqanswer>
+          Each data object has a README describing the source, contributors,
+          integration process and quality control workflow, etc. Go to General FAQ 8 for more information. 
+        </li>
+        <li class=faqanswer>
+          The data objects can be filtered based on different categories
+          (Protein, Proteoform, Glycan), by species (Homo sapiens, Mus
+          musculus, Rattis norvegicus etc.), and by file type (.csv, .fasta, .png, etc.).
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>8.</td>
+    <td id="question_21" class="faqquestion">
+      What is the format of the readme files? / How to read them?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_21" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          All readme files follow the BioCompute specifications. Technical
+          specifications can be found
+          <a href="https://github.com/biocompute-objects/BCO_Specification">
+            here
+          </a>.
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>9.</td>
+    <td id="question_22" class="faqquestion">
+      How is data integrated into GlyGen?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_22" class="faqanswer" colspan="2">
+        <br><br><img src="/content/general_faq21.png" width=70%/>
+    </td>
+  </tr>
+
+  <tr>
+    <td>10.</td>
+    <td id="question_23" class="faqquestion">
+      How can I submit my data?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_23" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          Please use our Contact <a href="https://www.glygen.org/contact.html">page</a> to submit your data to GlyGen.
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>11.</td>
+    <td id="question_24" class="faqquestion">
+      <a name="version_updates"></a>
+      How often is the GlyGen data updated?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_24" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          GlyGen data is released every six months during March-April and
+          August-September of each year.
+        </li>
+        <li class=faqanswer>
+          Minor updates to the data are made when a bug or a data issue has been
+          found and addressed.
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>12.</td>
+    <td id="question_25" class="faqquestion">
+      How can I access the previous versions of the data?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_25" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>Go to the <b>DATA</b> tab on the GlyGen home page.</li>
+        <li class=faqanswer>Click <b>view details</b> on the desired data object.</li>
+        <li class=faqanswer>
+          Select the desired version and date from the <b>Version</b> dropbox on
+          the top left corner and click on download.
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>13.</td>
+    <td id="question_26" class="faqquestion">
+      I am not able to retrieve any information for my UniProt Accession or
+      GlyTouCan Accession?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_26" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          Go to General FAQ 14 for more information.
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>14.</td>
+    <td id="question_27" class="faqquestion">
+      <a name="UniProt/GCT_accessions"></a>
+      Which UniProtKB and GlyTouCan accessions are included in GlyGen?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_27" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          GlyGen maintains a strict protein (UniProtKB) and glycan (GlyTouCan)
+          accession list compiled based on different criteria.
+        </li>
+        <li class=faqanswer>
+          The UniProtKB accession list serves as a reference for generating
+          protein-centric and proteoform-centric datasets, whereas the GlyTouCan
+          accession list is used for generating glycan-centric datasets. The
+          criteria and the statistics may be subject to change with every major
+          and minor release.
+          <ul class=faqanswer>
+            <li class=faqanswer>
+              Protein:
+              <ol>
+                <li class=faqanswer>
+                  Currently, GlyGen stores protein information (UniProtKB
+                  accessions) for only Human [Homo sapiens], Mouse [Mus
+                  musculus] and Rat [Rattus Norvegicus]species.
+                </li>
+                <li class=faqanswer>
+                  The list consists of total 20,997 UniProtKB canonical
+                  accessions complied via gene name grouping [UniProtKB
+                  version-Nov 2017].
+                </li>
+              </ol>
+            </li>
+            <li class=faqanswer>
+              Glycan:
+              <ol>
+                <li class=faqanswer>
+                  The GlyTouCan accession list is compiled when the accession
+                  falls under one or more selected criteria: Visit GlyGen dataset objects (Human: <a href="https://data.glygen.org/GLYDS000144"> GLYSD144</a>, Mouse: <a href="https://data.glygen.org/GLYDS000145">GLYSD145</a>, Rat: <a href=https://data.glygen.org/GLYDS000146">GLYSD146 </a>) for more information. 
+                </li>
+              </ol>
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>15.</td>
+    <td id="question_28" class="faqquestion">
+      The reference or the source database reflects different data than what is
+      represented in the GlyGen pages for the same annotation?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_28" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          The data in GlyGen is downloaded on a specific date (“freeze date”)
+          from the source which may also represent a specific release of that
+          database (e.g. UniProtKB Nov. 2018 release).
+        </li>
+        <li class=faqanswer>
+          If the source data changes after the GlyGen freeze date, or if there
+          is a synchronization delay, there could be a discrepancy in both
+          databases.
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>16.</td>
+    <td id="question_29" class="faqquestion">
+      Does GlyGen filter out publication information on the Protein detail page?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_29" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          Yes, GlyGen filters out some publications of large scale studies that
+          are based on genome sequencing, protein sequencing, cDNA, chromosomes
+          that do not provide any functional annotation related to the protein.
+        </li>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <td>17.</td>
+    <td id="question_30" class="faqquestion">
+      What is ECO or eco_id (eco_identifier)?
+    </td>
+  </tr>
+  <tr>
+    <td id="answer_30" class="faqanswer" colspan="2">
+      <ul class=faqanswer>
+        <li class=faqanswer>
+          The Evidence & Conclusion Ontology (ECO) is a controlled vocabulary
+          that describes scientific evidence, which results from a variety of
+          research methods, as well as interpretations by authors and scientific
+          curators. ECO is used to document specific evidence to support
+          conclusions that result from a scientific investigation.
+        </li>
+        <li class=faqanswer>Examples:</li>
+        <ul class=faqanswer>
+          <li class=faqanswer>
+            Inferred from Experiment (EXP)
+            <a href="http://www.evidenceontology.org/term/ECO:0000269/">
+              ECO:0000269
+            </a>
+            experimental evidence used in manual assertion
+          </li>
+          <li class=faqanswer>
+            Traceable Author Statement (TAS)
+            <a href="http://www.evidenceontology.org/term/ECO:0000304/">
+              ECO:0000304
+            </a>
+          </li>
+          <li class=faqanswer>
+            Inferred from Sequence Ontology (ISO)
+            <a href="http://www.evidenceontology.org/term/ECO:0000266/">
+              ECO:0000266
+            </a>
+          </li>
+          <li class=faqanswer>
+            Inferred from Sequence or Structural Similarity (ISS)
+            <a href="http://www.evidenceontology.org/term/ECO:0000250/">
+              ECO:0000250
+            </a>
+          </li>
+        </ul>
+        <li class=faqanswer>
+          Click <a href="http://www.evidenceontology.org/browse/">here</a> to
+          browse the ECO.
+        </li>
+      </ul>
+    </td>
+  </tr>
 </table>
-
-
-
-

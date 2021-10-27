@@ -1,0 +1,14 @@
+RewriteEngine on
+
+RewriteRule ^(create|home|datamodel|workflow|faq|history|toy)/?$  /index.html?pageid=$1 [L]
+
+RewriteRule ^(create|home|datamodel|workflow|faq|history|upload)/?$  /index.html?pageid=$1 [L]
+RewriteRule ^(GLY_.+)/(.+)/(readme)/?$  /cgi-bin/get_readme_txt.py?injson={"objid":"$1","objver":"$2"} [L] 
+RewriteRule ^(GLY_.+)/(history)/?$  /cgi-bin/get_history.py?injson={"objid":"$1"} [L]
+RewriteRule ^(GLY_.+)/(.+)/bco/?$  /cgi-bin/get_bco.py?injson={"objid":"$1","objver":"$2"} [L]
+RewriteRule ^(GLY_.+)/?$  /index.html [L]
+
+RewriteRule ^(GLYDS.+)/?$  /index.html [L]
+
+
+

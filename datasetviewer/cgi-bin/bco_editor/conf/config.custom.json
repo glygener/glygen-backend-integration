@@ -1,0 +1,22 @@
+{
+    "specversion":"1.3"
+    ,"dbinfo":{
+        "mongodbname":"glydb"
+        ,"mongodbuser":"glydbadmin"
+        ,"mongodbpassword":"glydbpass"
+    }
+    ,"pathinfo":{
+        "htmlroot":"/bco_editor/",
+        "schemaroot":"/bco_editor/schema/",
+        "htmlpath":"/var/www/html/datasetviewer/bco_editor/",
+        "schemapath":"/var/www/html/datasetviewer/bco_editor/schema/",
+        "bcoprefix":"http://data.glygen.org/DSBCO_%s"
+    }
+}
+
+
+
+
+
+
+

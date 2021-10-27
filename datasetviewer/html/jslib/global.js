@@ -2,25 +2,6 @@ var boxListIndex = 0;
 
 
 
-/////////////////////////////////////////////
-function setGlobalMenuCn(){
-
-        var cn = '<ul class="navbar-nav ml-auto">';
-        for (var i in topSectionObjs){
-                var obj = topSectionObjs[i];
-                var link = '<a id="'+obj.id+'" href="#" class="nav-link">'+obj.label;
-                link += (obj.id == gpageId ? '<span class="sr-only">(current)</span>' : '');
-                link += '</a>';
-                var liClass = (obj.id == gpageId ? "nav-item active" : "nav-item");
-                cn += (obj.access != '000' ? '<li class="'+liClass+'">' + link + '</li>' : '');
-        }
-        cn += '</ul>';
-        $('#navbarResponsive').html(cn);
-
-}
-
-
-
 
 /////////////////////////
 function getSections(){
@@ -45,7 +26,7 @@ function getSections(){
         	}
     	}
 
-	var s = 'width:15px;height:15px;font-size:15px;border:1px solid #fff;color:'+moduleMenuFg+';';
+	var s = 'width:15px;height:15px;font-size:16px;border:1px solid #fff;color:'+moduleMenuFg+';';
 	s += 'padding:0px 0px 0px 0px;text-align:center;vertical-align:middle;cursor:hand;';
 
 	var closeBtn = '<DIV id=closemodulemenu style="'+s+'">&times;</DIV>'	
@@ -96,7 +77,7 @@ function getSubtitleTable(){
 function fillStaticHtmlCn(fileName, containerId){
 
         
-        var url = htmlRoot + '/' + fileName;
+        var url =  fileName;
         var reqObj = new XMLHttpRequest();
         reqObj.containerId = containerId;
         reqObj.open("GET", url, true);
@@ -104,16 +85,6 @@ function fillStaticHtmlCn(fileName, containerId){
         reqObj.onreadystatechange = function() {
                 if (reqObj.readyState == 4 && reqObj.status == 200) {
                         var htmlText = reqObj.responseText;
-                        for (var key in grootInfoJson){
-				var ukey = key.toUpperCase();
-				var regEx = new RegExp(ukey, "g");    
-				htmlText = htmlText.replace(regEx ,grootInfoJson[key])
-                        }
-			for (var key in rootInfoJson){
-                                var ukey = key.toUpperCase();
-                                var regEx = new RegExp(ukey, "g");
-                                htmlText = htmlText.replace(regEx ,rootInfoJson[key])
-                        }
                         $(reqObj.containerId).html(htmlText);
                 }
                 else{
@@ -137,11 +108,11 @@ function getGenericFormTable(){
                 queryFormJson["boxlist"][boxListIndex][0]["value"] = fieldValueList[0].value;
         }
 
-        var s1 = 'padding:10 5 10 10;font-size:10px;';
-        var s2 = "font-size:10px;padding:0 15 5 10;";
-        var s3 = 'padding:0 5 0 5;font-size:11px;';
-        var s4 = 'padding:0 0 0 5;font-size:11px;cursor:hand;';
-        var s5 = 'padding:0 5 0 3;font-size:11px;cursor:hand;';
+        var s1 = 'padding:10 5 10 10;font-size:16px;';
+        var s2 = "font-size:16px;padding:0 15 5 10;";
+        var s3 = 'padding:0 5 0 5;font-size:16px;';
+        var s4 = 'padding:0 0 0 5;font-size:16px;cursor:hand;';
+        var s5 = 'padding:0 5 0 3;font-size:16px;cursor:hand;';
         var s = 'width:5px;height:5px;border-left:1px solid #777;border-bottom:1px solid #777;';
         s += '-ms-transform: rotate(-45deg);-webkit-transform: rotate(-45deg);transform: rotate(-45deg);';
         var arrowDown = '<div style="'+s+'"></div>';
@@ -162,7 +133,7 @@ function getGenericFormTable(){
 	table += '<table width=70% cellspacing=2 cellpadding=0>';
 	table += '<tr>';
         for (var i in queryFormJson["boxlist"][boxListIndex]){
-                var s = 'padding:5px 0px 0px 0px;font-size:11px;color:#777;' + 
+                var s = 'padding:5px 0px 0px 0px;font-size:16px;color:#777;' + 
 			'width:'+queryFormJson["boxlist"][boxListIndex][i]["containerwidth"]+';';
  		var boxLabel = (queryFormJson["boxlist"][boxListIndex][i]["boxlabel"] != undefined ? 
 					queryFormJson["boxlist"][boxListIndex][i]["boxlabel"] : "");
@@ -180,11 +151,11 @@ function getGenericFormTable(){
 //////////////////
 function getAdvancedFormTable(nfields){
 
-        var style = 'width:15px;height:15px;font-size:12px;border:1px solid #ccc;color:#ccc;text-align:center;';
+        var style = 'width:15px;height:15px;font-size:16px;border:1px solid #ccc;color:#ccc;text-align:center;';
         style += 'cursor:hand';
         var closeIcon = '<div id=genericform style="'+style+'">&times;</div>';
 
-        var style = 'width:15px;height:15px;font-size:12px;border:1px solid #ccc;color:#ccc;text-align:center;';
+        var style = 'width:15px;height:15px;font-size:16px;border:1px solid #ccc;color:#ccc;text-align:center;';
         style += 'cursor:hand';
         var addFieldIcon = '<div id=addfieldicon style="'+style+'">+</div>';
         var delFieldIcon = '<div id=delfieldicon style="'+style+'">-</div>';
@@ -253,7 +224,7 @@ function getAdvancedFormTable(nfields){
         rows += '<tr><td colspan=2 style="border:0px solid;" align=right>' + addFieldIcon + '</td>' +
                 '<td>'+delFieldIcon+'</td>' +
                 '</tr>';
-        var style = 'font-size:10px;border:1px solid #fff;padding:10px;';
+        var style = 'font-size:16px;border:1px solid #fff;padding:10px;';
         return '<table width=70% cellspacing=2 cellpadding=0 style="'+style+'" border=0>' + rows +  '</table>' +
                 '<input type=hidden name=searchtype value="advanced">';
 
@@ -310,11 +281,11 @@ function getBioxpressFormTableOne(){
 
 
 
-        var s1 = 'padding:10 5 5 10;font-size:11px;';
-        var s2 = "font-size:10px;padding:5 10 5 10;";
-        var s3 = 'padding:10 5 5 10;font-size:11px;';
+        var s1 = 'padding:10 5 5 10;font-size:16px;';
+        var s2 = "font-size:16px;padding:5 10 5 10;";
+        var s3 = 'padding:10 5 5 10;font-size:16px;';
 
-        var style = 'font-size:13px;border:1px solid #fff;color:'+moduleMenuFg+';';
+        var style = 'font-size:16px;border:1px solid #fff;color:'+moduleMenuFg+';';
         var formTable = '<table width=100% cellspacing=0 cellpadding=0 style="'+style+'">'+
                         '<tr height=30>'+
                         '<td nowrap style="'+s1 + '">&nbsp;Search for<br>'+ selector1+ '</td>' +
@@ -447,11 +418,11 @@ function getElement(emObj){
 //////////////////////////////////
 function rndrMiniTable(inObj){
 
-	var style = "width:100%;font-size:12px;border:1px solid #ccc;"
+	var style = "width:100%;font-size:16px;border:1px solid #ccc;"
 	var table = '<table style="'+style+'" align=center cellspacing=1>';
-	table += '<tr >';
+	table += '<tr height=30>';
 	for (var j in inObj["headers"]){
-		var style = "text-align:center;font-weight:bold;border:1px solid #ccc;"
+		var style = "text-align:center;font-weight:bold;padding:5px 0px 0px 0px;border:1px solid #ccc;"
 		style += (j in inObj["colwidth"] ? "width:" + inObj["colwidth"][j] : "");
 		table += '<td style="'+style+'" >'+inObj["headers"][j]+'</td>';
 	}
@@ -460,7 +431,7 @@ function rndrMiniTable(inObj){
 	for (var i =0; i < inObj["content"].length; i ++){
 		table += '<tr height=30>';
 		for (var j in inObj["content"][i]){
-                	var style = "text-align:center;border:1px solid #ccc;"
+                	var style = "text-align:center;padding:5px 0px 0px 0px;border:1px solid #ccc;"
 			table += '<td style="'+style+'">'+inObj["content"][i][j]+'</td>';
        	 	}
         	table += '</tr>';
@@ -473,7 +444,7 @@ function rndrMiniTable(inObj){
 ////////////////////////////
 function getWaitMsg(){
 
-        var imgUrl = ghtmlRoot + '/imglib/loadingicon.gif';
+        var imgUrl =  '/imglib/loadingicon.gif';
         var imgObj = '<img src="'+imgUrl+'">';
         var cn = '<table width=100% height=400><tr><td valign=middle align=center>'+imgObj+'</td></tr></table>';
         return cn;
@@ -496,10 +467,10 @@ function getErrorMsg(msg){
 
 
 /////// Event Handlers ///////////////////
-$(document).on('click', ':input', function (event) {
-        event.preventDefault();
-	handleEvents({"emclass":this.className, "emid":this.id});
-});
+//$(document).on('click', ':input', function (event) {
+//        event.preventDefault();
+//	handleEvents({"emclass":this.className, "emid":this.id});
+//});
 
 
 ///////////////////////////////////////////
@@ -581,7 +552,7 @@ function handleEvents(inObj){
 
 
 ///////////////////////////////////////////////////
-$.urlParam = function(name){
+function getUrlParam(name){
 	var parts1 = window.location.href.split("?");
 	if(parts1.length > 1){
 		var parts2 = parts1[1].split("&");

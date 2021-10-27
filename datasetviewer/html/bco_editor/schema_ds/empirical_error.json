@@ -1,0 +1,55 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "http://biocomputeobject.org/schemas/empirical_error.json",
+    "type": "object",
+    "required": [
+        "tabular_output_qc"
+    ],
+    "properties": {
+        "tabular_output_qc": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "title":"output_qc",
+                "required": [
+                    "file_name",
+                    "statistics"
+                ],
+                "properties": {
+                    "file_name": {
+                        "type": "string",
+                        "title":"file_name",
+                        "description": "File name"
+                    },
+                    "statistics":{
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "title":"statistics",
+                            "required": [
+                                "field_name", "field_description","unique_values"
+                            ],
+                            "properties": {
+                                "field_name":{
+                                    "type": "string",
+                                    "title":"field_name",
+                                    "description": "Field name"
+                                },
+                                "field_description":{
+                                    "type": "string",
+                                    "title":"field_description",
+                                    "description": "Field description"
+                                },
+                                "unique_values":{
+                                    "type": "integer",
+                                    "title":"unique_values",
+                                    "description": "Number of unique values for the field"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

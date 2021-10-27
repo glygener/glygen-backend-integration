@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "bco_editor", line 134, in get_object_view_json
+    for o in doc["provenance_domain"]["contributors"]:
+KeyError: 'contributors'

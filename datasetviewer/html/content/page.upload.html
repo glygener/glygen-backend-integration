@@ -1,0 +1,124 @@
+<form method='post' enctype='multipart/form-data'>
+<table width=100% style="background:#fff;border-radius:10px;">
+<tr>
+    <td  colspan=2 style="padding-top:20px;padding-left:20px;">
+        
+        <span style="font-size:20px;font-weight:bold;">Upload your csv or tsv file</span>
+        <span style="font-size:12px;font-style:italic;">
+            (<a href="/content/upload_tutorial.pdf" download>Tutorial PDF</a>, <a href="/ln2uploads/examples/glygen_upload_example_file.csv" download>example CSV file</a>, <a href="/ln2uploads/examples/glygen_upload_example_file.txt" download>example TSV file</a>, <a href="/ln2uploads/examples/glycan.png" download>example glycan PNG file</a>)
+        </span>
+
+        </td>
+    </tr>
+
+
+<tr>
+    <td style="padding-top:20px;padding-left:40px;font-style:italic;width:350px;">
+        Select format<br>
+        <select id=fileformat name=fileformat style="width:100%;height:35px;">
+            <option value="csv">Comma Separated Values (CSV)</option>
+            <option value="tsv">Tab Separated Values (TSV)</option>
+            <option value="glycanimage">Glycan JPEG or PNG</option>
+        </select>
+    </td>
+    <td style="padding-top:20px;padding-left:20px;font-style:italic;">
+        Select file<br>
+        <input id=userfile type='file' name='userfile'>
+    </td>
+</tr>
+
+<tr><td colspan=2>&nbsp;</td></tr>
+
+</table>
+
+<div  style="display:block;float:left;width:100%;padding:10px 10px 20px 40px;text-align:left;margin-top:-10px;background:#fff;border-radius:10px;">
+    <input id=submitfile type='submit' value='Submit File'/>
+</div>
+
+<div id=progresscn style="display:block;float:left;width:100%;border:0px dashed orange;"></div>
+
+
+<DIV id=allwrappercn style="display:block;float:left;width:100%;border:0px dashed orange;">
+
+
+<div id=savewrappercn style="display:none;float:left;width:100%;margin-top:10px;padding:10px 10px 5px 10px;border-bottom:1px solid #ccc;">
+<div class=titlecn  id=savetitlecn style="margin-top:10px;text-align:right;font-weight:bold;cursor:hand;color:#3279b5;">Save File</div>
+<div id=savecn style="display:none;padding:10px;text-align:left;margin-top:0px;">
+    <input type=text placeholder="First name" class=savefilefield id=fname name=fname style="width:40%;height:30px;padding:5px;border-radius:5px;margin-bottom:10px;border:0px dashed #fff;"><br>
+    <input type=text placeholder="Last name" class=savefilefield id=lname name=lname style="width:40%;height:30px;padding:5px;border-radius:5px;margin-bottom:10px;border:0px dashed #fff;"> <br>
+    <input type=text placeholder="Email Address" class=savefilefield id=email name=email style="width:40%;height:30px;padding:5px;border-radius:5px;margin-bottom:10px;border:0px dashed #fff;"> <br>
+    <input type=text placeholder="Institute" class=savefilefield id=institute name=institute style="width:40%;height:30px;padding:5px;border-radius:5px;margin-bottom:10px;border:0px dashed #fff;"> <br>
+    <input id=savefile type=submit  name=btn value="Save">
+</div>
+</div>
+
+
+
+
+<div id=qcreportwrappercn style="display:none;float:left;width:100%;margin-top:10px;padding:10px 10px 15px 10px;border:1px solid #ccc;border-radius:10px;">
+            <div class=titlecn id=qcreporttitlecn style="margin-top:10px;text-align:left;font-weight:bold;cursor:hand;color:#3279b5;">Basic Sanity Check</div>
+                        <div id=qcreportcn style="padding:10px;margin-top:0px;border:0px dashed orange;"></div>
+</div>
+
+
+
+
+
+<div id=idmappingwrappercn style="display:none;float:left;width:100%;margin-top:10px;padding:10px 10px 15px 10px;border:1px solid #ccc;border-radius:10px;">
+    <div class=titlecn  id=idmappingtitlecn style="margin-top:10px;text-align:left;font-weight:bold;cursor:hand;color:#3279b5;">Mapping to GlyGen IDs</div>
+    <div class=idmappingcn id=idmapselectorone style="display:none;float:left;text-align:left;padding:10px;margin-top:10px;margin-right:20px;width:30%;background:#f1f1f1;border-radius:10px;">
+    </div>
+    <div class=idmappingcn id=idmapselectortwo style="display:none;float:left;text-align:left;padding:10px;margin-top:10px;width:30%;background:#f1f1f1;border-radius:10px;">
+    </div>
+    <div class=idmappingcn id=idmapselectordesc style="display:none;float:left;text-align:left;padding:10px;margin-top:10px;width:100%;">
+    Note: Given a user-provided image of a glycan, this application outputs the glycan IDs of the five most similar glycans in the GlyGen database. The classification is based solely on the features that can be extracted from the images of the glycan structures. These features are extracted using the bagOfFeatures command in Matlab's Computer Vision toolbox. The features are used by the Neural Network algorithm from Matlab's Deep Learning Toolbox to identify the potential glycan ID of the image. This algorithm can only match images to glycan IDs that are contained in GlyGen.<br><br>Contributors: Abigail Basener, Sarah Peterson, Tiyani Wang, Jonathon Keeney, Robel Kahsay,  Raja Mazumder
+
+    </div>
+    <div class=idmappingcn id=idmapqueryimagecn style="display:none;float:left;text-align:left;padding:10px;margin-top:10px;width:100%;font-weight:bold;">
+        
+    </div>
+    <div class=idmappingcn id=idmappingresultcn style="display:none;float:left;text-align:left;padding:10px;margin-top:0px;width:100%;background:#fff;">
+    </div>
+</div>
+
+
+
+
+
+<div id=sitemappingwrappercn style="display:none;float:left;width:100%;margin-top:10px;padding:10px 10px 15px 10px;border:1px solid #ccc;border-radius:10px;">
+    <div class=titlecn  id=sitemappingtitlecn style="margin-top:10px;text-align:left;font-weight:bold;cursor:hand;color:#3279b5;">Protein Site Check</div>
+    <div class=sitemappingcn id=sitemapselectorone style="display:none;float:left;text-align:left;padding:10px;margin-top:10px;margin-right:20px;width:25%;background:#f1f1f1;border-radius:10px;">
+    </div>
+    <div class=sitemappingcn id=sitemapselectortwo style="display:none;float:left;text-align:left;padding:10px;margin-top:10px;width:25%;background:#f1f1f1;border-radius:10px;">
+    </div>
+
+    <div class=sitemappingcn id=sitemapselectorthree style="display:none;float:left;text-align:left;padding:10px;margin-top:10px;width:30%;background:#f1f1f1;border-radius:10px;">
+    </div>
+
+    <div class=sitemappingcn id=sitemappingresultcn style="display:none;float:left;text-align:left;padding:10px;margin-top:10px;width:100%;background:#fff;">
+    </div>
+</div>
+
+
+
+<div id=previewwrappercn style="display:none;float:left;width:100%;margin-top:10px;padding:10px 10px 15px 10px;border:1px solid #ccc;border-radius:10px;">
+<div class=titlecn  id=previewtitlecn style="margin-top:10px;text-align:left;font-weight:bold;cursor:hand;color:#3279b5;">Records Preview
+    </div>
+    
+<div id=previewdownloadcn style="display:none;float:right;margin:10px;text-align:right;cursor:hand;"></div>
+<div id=previewcn style="display:none;padding:10px;margin-top:0px;border:0px dashed orange;"></div>
+</div>
+
+
+<div id=sanitywrappercn style="display:none;float:left;width:100%;margin-top:10px;padding:10px 10px 15px 10px;border:1px solid #ccc;border-radius:10px;">
+<div class=titlecn  id=sanitytitlecn style="margin-top:10px;text-align:left;font-weight:bold;cursor:hand;color:#3279b5;">Failed Records</div>
+<div id=sanitycn style="padding:10px;margin-top:0px;border:0px dashed orange;"></div>
+</div>
+
+
+
+</DIV>
+
+</form>
+
+

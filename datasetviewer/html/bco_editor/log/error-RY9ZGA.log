@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "bco_editor", line 100, in search_objects
+    created_by = doc["provenance_domain"]["contributors"][0]["email"]
+KeyError: 'contributors'

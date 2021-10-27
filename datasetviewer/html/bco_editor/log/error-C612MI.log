@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/var/www/cgi-bin/datasetviewer/bco_editor/bco_editor", line 87, in search_objects
+    query_obj = {"bco_id":int(in_json["queryvalue"])}
+ValueError: invalid literal for int() with base 10: 'Human'

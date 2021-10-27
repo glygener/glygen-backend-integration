@@ -15,9 +15,15 @@ function drawTable(dataGrid, containerId, optObj) {
                 }
                 var em = document.getElementById(containerId);
                 var table = new google.visualization.Table(em);
-		var options = {showRowNumber: false, width: '100%', height: '100%',
-				page:'enable', pageSize:optObj["pagesize"], allowHtml:true, 
-				cssClassNames:{headerRow: 'googlebigbold', tableCell:'googlecell'}
+		var options = {showRowNumber: false, width: '100%', height: '',
+		    page:'enable', pageSize:optObj["pagesize"], allowHtml:true, 
+                    cssClassNames:{
+                        headerRow: 'googleheaderrow',
+                        tableRow:'googlerow', 
+                        oddTableRow:'googleoddrow',
+                        headerCell:'googleheadercell',
+                        tableCell:'googlecell'
+                    }
 		};
                 table.draw(data, options);
         }
