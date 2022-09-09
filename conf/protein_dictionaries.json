@@ -1,6 +1,10 @@
 {
-    "xrefdb2url":{
-        "fileglob":["database_url_templates.csv"],
+    "xrefkey2url":{
+        "fileglob":["xref_info.csv"],
+        "indexlist":[0,2]
+    }
+    ,"xrefkey2badge":{
+        "fileglob":["xref_info.csv"],
         "indexlist":[0,1]
     }
     ,"aaformat":{

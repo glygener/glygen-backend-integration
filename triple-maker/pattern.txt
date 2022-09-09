@@ -1,0 +1,4 @@
+^        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+^        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+^        <IRI>#
+^        <Literal datatypeIRI="http://www.w3.org/2001/XMLSchema#string">

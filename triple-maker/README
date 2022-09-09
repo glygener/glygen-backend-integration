@@ -1,0 +1,30 @@
+Updateing uniprot graphs
+========================
+1) Edit and run update-uniprot-graphs.sh
+
+
+Loading diseae graph
+====================
+1) clear-disease-graph.sh
+2) count-disease-triples.sh 
+3) load-disease-graph.sh
+
+    
+Loading glygen graph
+======================
+1) clear-glygen-graph.sh
+2) load-glygen-graph.sh
+
+
+Model visualization
+===================
+python owl-maker.py
+java -jar owl2vowl.jar -file generated/datamodel/glygen.owl -output generated/datamodel/glygen.json
+cp generated/datamodel/glygen.json /var/www/html/sparql/webvowl/data/
+
+
+Making triples
+==============
+Follow instructions in wrap-make-triples.sh
+
+

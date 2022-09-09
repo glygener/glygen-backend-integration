@@ -3,10 +3,14 @@
         "fileglob":["taxid2name.csv"],
         "indexlist":[0,1]
     }
-    ,"xrefdb2url":{
-        "fileglob":["database_url_templates.csv"],
-        "indexlist":[0,1]
+    ,"xrefkey2url":{
+        "fileglob":["xref_info.csv"],
+        "indexlist":[0,2]
     }
+    ,"xrefkey2badge":{
+        "fileglob":["xref_info.csv"],
+        "indexlist":[0,1]
+    } 
     ,"subtypetags":{
         "fileglob":["glycan_subtype_tags.csv"],
         "indexlist":[0,1]
