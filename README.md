@@ -82,16 +82,14 @@ Making data release package
 
         a)  Make release dir /data/shared/glygen/releases/data/v-$ver/ and 
             copy files into it
-            $ python3 release-maker/make-dataset-files.py -v $ver
-
-        b)  Make slinks for motif images
-            $ python3 release-maker/make-motif-image-slinks.py -v 
-
-        c)  Versionize objects
-            $ python3 release-maker/versionize-objects.py -v $ver
-
-
-        d)  Make ftp release dir /data/shared/glygen/releases/ftp/v-$ver
+            $ python3 release-maker/release-frontend-data.py -v $ver
+	    $ python3 release-maker/release-dsviewer-data.py -v $ver
+	
+	The script release-dsviewer-data.py will also perform:
+		- slinks for motif_ac (for images)
+            	- versionize objects in bcodb,extractdb ...
+        
+	b)  Make ftp release dir /data/shared/glygen/releases/ftp/v-$ver
             $ python3 release-maker/make-ftp-release.py -v $ver
 
 

@@ -79,7 +79,7 @@ def dump_record_counts(jsondb_dir, count_file, reviewed_dir):
 
 def sort_release_list(tmp_list, reversed_flag):
 
-    factor_list = [10000, 1000, 1]
+    factor_list = [100000000, 1000, 1]
     rel_dict = {}
     for rel in tmp_list:
         parts = rel.split(".")

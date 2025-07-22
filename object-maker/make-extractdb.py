@@ -6,6 +6,8 @@ import json
 import glob
 import subprocess
 from optparse import OptionParser
+import csvutil
+
 
 __version__="1.0"
 __status__ = "Dev"
@@ -13,24 +15,26 @@ __status__ = "Dev"
 
 
 
-def get_readme(doc):
+def get_readme(bco_id, doc):
 
     if doc == None:
-        out_buffer += "\n\n\tReadme file does not exist for object %s!" % (obj_id)
+        out_buffer += "\n\n\tReadme file does not exist for object %s!" % (bco_id)
     else:
         creator_list = []
         author_list = []
         for o in doc["provenance_domain"]["contributors"]:
             for p in ["createdBy"]:
-                if p in o["contribution"]:
-                    email = o["email"] if "email" in o else ""
-                    name = o["name"] if "name" in o else ""
-                    creator_list.append("%s [%s]" % (name, email))
+                if "contribution" in o:
+                    if p in o["contribution"]:
+                        email = o["email"] if "email" in o else ""
+                        name = o["name"] if "name" in o else ""
+                        creator_list.append("%s [%s]" % (name, email))
             for p in ["contributedBy", "authoredBy"]:
-                if p in o["contribution"]:
-                    email = o["email"] if "email" in o else ""
-                    name = o["name"] if "name" in o else ""
-                    author_list.append("%s [%s]" % (name, email))
+                if "contribution" in o:
+                    if p in o["contribution"]:
+                        email = o["email"] if "email" in o else ""
+                        name = o["name"] if "name" in o else ""
+                        author_list.append("%s [%s]" % (name, email))
 
         modified = ""
         if "modified" in doc["provenance_domain"]:
@@ -40,7 +44,8 @@ def get_readme(doc):
         out_buffer = ""
         out_buffer += "Name\n   - %s" % (doc["provenance_domain"]["name"])
         out_buffer += "\n\nVersion\n   - %s" % (doc["provenance_domain"]["version"])
-        out_buffer += "\n\nCreated on\n  - %s" % (doc["provenance_domain"]["created"])
+        if "created" in doc["provenance_domain"]:
+            out_buffer += "\n\nCreated on\n  - %s" % (doc["provenance_domain"]["created"])
         out_buffer += "\n\nModified on\n   - %s" % (modified)
         out_buffer += "\n\nCreated by\n   - %s" % (", ".join(creator_list))
         out_buffer += "\n\nAuthors\n   - %s" % (", ".join(author_list))
@@ -48,16 +53,22 @@ def get_readme(doc):
         if doc["usability_domain"]  != []:
             out_buffer += "\n\nUsability Domain\n   - %s" % ("\n   - ".join(doc["usability_domain"]))
 
-        if doc["description_domain"]["keywords"] != [] or doc["description_domain"]["pipeline_steps"] != []:
-            out_buffer += "\n\nDescription Domain"
-            if "keywords" in doc["description_domain"]:
-                if doc["description_domain"]["keywords"] != []:
-                    out_buffer += "\n   Keywords\n   - %s" % ("\n   - ".join(doc["description_domain"]["keywords"]))
-            if "pipeline_steps" in doc["description_domain"]:
-                if doc["description_domain"]["pipeline_steps"] != []:
-                    out_buffer += "\n\n   Pipeline Steps"
-                    for o in doc["description_domain"]["pipeline_steps"]:
-                        out_buffer += "\n   - Step-%s: %s" % (o["step_number"], o["description"])
+        if "description_domain" in doc:
+            if "keywords" not in doc["description_domain"]:
+                doc["description_domain"]["keywords"] = []
+            if doc["description_domain"]["keywords"] != [] or doc["description_domain"]["pipeline_steps"] != []:
+                out_buffer += "\n\nDescription Domain"
+                if "keywords" in doc["description_domain"]:
+                    if doc["description_domain"]["keywords"] != []:
+                        if None in doc["description_domain"]["keywords"]:
+                            doc["description_domain"]["keywords"].remove(None)
+                        out_buffer += "\n   Keywords\n   - %s" % ("\n   - ".join(doc["description_domain"]["keywords"]))
+                if "pipeline_steps" in doc["description_domain"]:
+                    if doc["description_domain"]["pipeline_steps"] != []:
+                        out_buffer += "\n\n   Pipeline Steps"
+                        for o in doc["description_domain"]["pipeline_steps"]:
+                            if "step_number" in o and "description" in o:
+                                out_buffer += "\n   - Step-%s: %s" % (o["step_number"], o["description"])
 
         if doc["execution_domain"] != {}:
             out_buffer += "\n\nExecution Domain"
@@ -141,7 +152,7 @@ def get_preview(doc):
                         for val in row:
                             tmp_list.append(val)
                         out_json.append(tmp_list)
-                    if rowCount == 85:
+                    if rowCount == 3:
                         break
             return {"type":"table", "data":out_json}
         elif file_type == "fasta":
@@ -179,7 +190,7 @@ def get_preview(doc):
             return {"type":"html", "data":html_cn}
         elif file_type in ["gp", "gb", "nt"]:
             in_file = reviewed_dir + file_name
-            html_cn = "<pre>"
+            html_cn = ""
             line_count = 0
             with open(in_file, "r") as FR:
                 for line in FR:
@@ -187,8 +198,7 @@ def get_preview(doc):
                     line_count += 1
                     if line_count == 100:
                         break
-            html_cn += "</pre>"
-            return {"type":"html", "data":html_cn}
+            return {"type":"text", "data":html_cn}
         else:
             html_cn = "<pre>Please implement service for %s preview!</pre>" % (file_type)
             return {"type":"html", "data":html_cn}
@@ -214,28 +224,39 @@ def process_bco_docs(doc_list):
                             cat_value = o["category_value"].strip()
                             if cat_value.strip() == "":
                                 continue
-                            category_dict[cat_name] = cat_value
+                            if cat_name not in category_dict:
+                                category_dict[cat_name] = []
+                            if cat_value not in category_dict[cat_name]:
+                                category_dict[cat_name].append(cat_value)
 
         retired_flag = ""
         for s in ["dataset_status", "status"]:
             if s in category_dict:
-                if category_dict[s].lower() in ["retired"]:
-                    retired_flag = "retired"
+                for v in category_dict[s]:
+                    if v.lower() in ["retired"]:
+                        retired_flag = "retired"
         if retired_flag == "retired":
             continue
 
-        file_name = ""
+        file_name_list = []
         if "io_domain" in doc:
             if "output_subdomain" in doc["io_domain"]:
                 if doc["io_domain"]["output_subdomain"] != []:
-                    file_name = doc["io_domain"]["output_subdomain"][0]["uri"]["filename"].strip()
-        if file_name == "":
+                    for ooo in doc["io_domain"]["output_subdomain"]:
+                        if "uri" in ooo:
+                            if "filename" in ooo["uri"]:
+                                file_name = ooo["uri"]["filename"].strip()
+                                if file_name != "":
+                                    if file_name.find(".stat.csv") == -1:
+                                        file_name_list.append(file_name)
+        if len(file_name_list) == 0:
             continue
         bco_id = doc_obj["object_id"].split("/")[-2]
-        file_type = file_name.split(".")[-1]
+        file_type = file_name_list[0].split(".")[-1]
         if category_dict == {}:
             category_dict["file_type"] = file_type.lower()
-
+        if "usability_domain" not in doc:
+            doc["usability_domain"] = []
         desc = doc["usability_domain"][0] if doc["usability_domain"] != [] else ""
         max_desc_len = 100
         if len(desc) > max_desc_len:
@@ -251,12 +272,13 @@ def process_bco_docs(doc_list):
             "bcoid": bco_id,
             "title":doc["provenance_domain"]["name"],
             "description":desc,
-            "filename": file_name,
+            "filename_list":", ".join(file_name_list),
+            "filename": file_name_list[0],
             "filetype": file_type,
             "categories":category_dict
         }
         if file_type in ["csv", "tsv", "txt"]:
-            obj["minitable"] = get_mini_table(file_name, file_type)
+            obj["minitable"] = get_mini_table(file_name_list[0], file_type)
         else:
             obj["iconfilename"] = "%s_icon_all.png" % (file_type)
       
@@ -306,12 +328,18 @@ def main():
     global glycan_images_dir
     global wrk_dir
 
-    wrk_dir = "/home/rykahsay/glygen-backend-integration/object-maker"
+    wrk_dir = "/data/shared/repos/glygen-backend-integration/object-maker/"
 
     data_ver = "x.x.x"
     reviewed_dir = wrk_dir + "/reviewed/"
     release_root = "/ln2data/releases/data/v-%s/" % (data_ver)
     glycan_images_dir = wrk_dir + "/downloads/glytoucan/current/export/snfg/extended/png/"
+
+
+         
+    log_file = "logs/make-extractdb.log"
+    msg = "make-extractdb: started logging"
+    csvutil.write_log_msg(log_file, msg, "w")
 
     doc_list = []
     file_list = glob.glob(wrk_dir + "/jsondb/bcodb/*.json")
@@ -333,11 +361,12 @@ def main():
         bco_id = doc["extract"]["bcoid"]
         out_file = extractdb_dir + "/%s.json" % (bco_id)
         doc["extract"]["sampledata"] = get_preview(doc)
-        doc["extract"]["readme"] = get_readme(doc)
+        doc["extract"]["readme"] = get_readme(bco_id, doc)
         doc["extract"]["downloadurl"] = release_root + "reviewed/" +  doc["extract"]["filename"]
         with open(out_file,"w") as FW:
             FW.write("%s\n" % (json.dumps(doc["extract"], indent=4)))
-        print ("created jsondb/extractdb/%s.json" % (bco_id))
+        msg = "make-extractdb: created jsondb/extractdb/%s.json" % (bco_id)
+        csvutil.write_log_msg(log_file, msg, "a")
 
     cmd = "chmod -R 775 " + extractdb_dir
     x, y = subprocess.getstatusoutput(cmd)

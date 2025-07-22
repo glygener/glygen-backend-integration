@@ -40,9 +40,14 @@ def main():
             obj["uri"]["uri"] = obj["uri"]["uri"].replace("/v-x.x.x/", "/v-%s/"%(ver))
         for obj in doc["io_domain"]["input_subdomain"]:
             obj["uri"]["uri"] = obj["uri"]["uri"].replace("/v-x.x.x/", "/v-%s/"%(ver))
-        for obj in doc["description_domain"]["pipeline_steps"]:
-            for o in obj["input_list"] + obj["output_list"]:
-                o["uri"] = o["uri"].replace("/v-x.x.x/", "/v-%s/"%(ver))
+        if "description_domain" in doc:
+            if "pipeline_steps" in doc["description_domain"]:
+                for obj in doc["description_domain"]["pipeline_steps"]:
+                    for o in obj["input_list"] + obj["output_list"]:
+                        if o == None:
+                            continue
+                        if "uri" in o:
+                            o["uri"] = o["uri"].replace("/v-x.x.x/", "/v-%s/"%(ver))
         
         doc["etag"] = ""
         hash_obj = hashlib.md5(json.dumps(doc).encode('utf-8'))
@@ -57,7 +62,7 @@ def main():
     for obj_file in file_list:
         doc = json.loads(open(obj_file, "r").read())
         for k in ["downloadurl", "readme"]:
-            doc[k] = doc[k].replace("/v-x.x.x/", "/v-%s/"%(ver))
+            doc[k] = doc[k].replace("v-x.x.x", "v-%s"%(ver))
         with open(obj_file, "w") as FW:
             FW.write("%s\n" % (json.dumps(doc, indent=4)))
 

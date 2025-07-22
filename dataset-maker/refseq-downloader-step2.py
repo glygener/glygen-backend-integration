@@ -15,7 +15,9 @@ from Bio import SeqIO
 
 def main():
 
-    tax_id, species = "7227", "fruitfly"
+    #tax_id, species = "7227", "fruitfly"
+    tax_id, species = "9031", "chicken"
+
     in_file = "unreviewed/%s_protein_xref_refseq.csv" % (species)
     data_frame = {}
     libgly.load_sheet(data_frame, in_file, ",")

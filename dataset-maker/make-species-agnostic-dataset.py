@@ -28,6 +28,80 @@ __version__="1.0"
 __status__ = "Dev"
 
 
+def extract_glygen_flybase_linkout_ds():
+
+    newrow = ["FlyBase ID", "DBNAME",  "DBID",    "DBURL"]
+    print "%s"  % ("\t".join(newrow))
+
+    file_list = glob.glob(path_obj["unreviewed"] +  "*_protein_xref_flybase.csv")
+    for in_file in file_list:
+        data_frame = {}
+        libgly.load_sheet(data_frame, in_file, ",")
+        f_list = data_frame["fields"]
+        seen = {}
+        for row in data_frame["data"]:
+            canon = row[f_list.index("uniprotkb_canonical_ac")]
+            xref_id = row[f_list.index("xref_id")]
+            if canon not in seen:
+                newrow = [xref_id,"GlyGen",canon,canon]
+                print "%s"  % ("\t".join(newrow))
+                seen[canon] = True
+    return
+
+
+
+
+def extract_reaction2ec_rhea_ds():
+
+    sp_list = []
+    for sp in species_obj:
+        if sp.strip() != "" and sp.isdigit() == False:
+            sp_list.append(sp)
+            
+    rxnid2ec = {}
+    cmd = "grep hasEnzyme downloads/ebi/current/uniprot-proteome-*.nt"
+    line_list = commands.getoutput(cmd).split("\n")
+    for line in line_list:
+        if line.strip() == "":
+            continue
+        reaction_id = line.split(" ")[0].split("/")[-1].replace(">", "")
+        ec_number = line.split(" ")[-2].split("/")[-1].replace(">", "") 
+        if reaction_id not in rxnid2ec:
+            rxnid2ec[reaction_id] = {}
+        rxnid2ec[reaction_id][ec_number] = True
+
+    in_file = "downloads/rhea/current/rhea-ec-iubmb.tsv"
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, "\t")
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        reaction_id = row[f_list.index("REACTION_ID")]
+        ec_number =row[f_list.index("EC")]
+        if reaction_id not in rxnid2ec:
+            rxnid2ec[reaction_id] = {}
+        rxnid2ec[reaction_id][ec_number] = True
+
+
+
+    seen_row ={}
+    sheet_obj = {"reactions":[]}
+    sparqlutil.load_reactions(sheet_obj, sp_list)
+    tmprow = ["reaction_id","ec_number"]
+    print "\"%s\""  % ("\",\"".join(tmprow))
+    for o in sheet_obj["reactions"]:
+        reaction_id = o["reactionid"]
+        if reaction_id not in rxnid2ec:
+            continue
+        for ec_number in rxnid2ec[reaction_id]:
+            tmprow = [ reaction_id, ec_number]
+            s = "%s|%s" % (reaction_id, ec_number)
+            if s not in seen_row:
+                print "\"%s\""  % ("\",\"".join(tmprow))
+                seen_row[s] = True
+
+    return
+
+
 def extract_top_authors_ds():
 
     file_list = glob.glob("unreviewed/glycan_citations_*.csv")
@@ -203,18 +277,16 @@ def load_motif_masterlist():
 
 def load_glycan_masterlist():
 
-    glycan_list = []
     data_frame = {}
     in_file = path_obj["unreviewed"] +  "glycan_masterlist.csv"
     libgly.load_sheet(data_frame, in_file, ",")
     f_list = data_frame["fields"]
+    seen = {}
     for row in data_frame["data"]:
         ac = row[f_list.index("glytoucan_ac")]
-        if ac not in glycan_list:
-            glycan_list.append(ac)
+        seen[ac] = True
 
-    return glycan_list
-
+    return list(seen.keys())
 
 
 
@@ -238,21 +310,35 @@ def extract_sequences_ds(seq_format):
 
 
     data_frame = {}
-    in_file = path_obj["downloads"] + "glytoucan/current/export/monocomp.tsv"
+    #in_file = path_obj["downloads"] + "glytoucan/current/export/monocomp.tsv"
+    in_file = path_obj["downloads"] + "glytoucan/current/export/names.tsv"
     libgly.load_sheet(data_frame, in_file, "\t")
     f_list = data_frame["fields"]
-    ac2comp = {}
+    ac2comp_one = {}
     for row in data_frame["data"]:
-        glytoucan_ac = row[f_list.index("accession")]
-        comp = ""
-        for f in f_list[1:-1]:
-            n = row[f_list.index(f)]
-            if n != "0":
-                comp += "%s(%s)" % (f, n)
-        ac2comp[glytoucan_ac] = comp
-
+        glytoucan_ac = row[f_list.index("GlyTouCanAccession")]
+        comp = row[f_list.index("Name")]
+        domain = row[f_list.index("Domain")]
+        if domain == "Byonic":
+            ac2comp_one[glytoucan_ac] = comp
+   
+    ac2comp_two = {}
+    in_file = path_obj["downloads"] + "glytoucan/current/export/subsumption.tsv"
+    libgly.load_sheet(data_frame, in_file, "\t")
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        glytoucan_ac = row[f_list.index("GlyTouCanAccession")]
+        relationship = row[f_list.index("Relationship")]
+        related_ac = row[f_list.index("RelatedAccession")]
+        #if relationship == "BaseComposition" and related_ac in ac2comp:
+        if relationship == "Ancestor" and related_ac in ac2comp_one:
+            if glytoucan_ac not in ac2comp_two:
+                ac2comp_two[glytoucan_ac] = {}
+            ac2comp_two[glytoucan_ac][related_ac] = ac2comp_one[related_ac]
 
     newrow = ["glytoucan_ac","sequence_%s" % (seq_format)]
+    if seq_format == "byonic":
+        newrow.append("name_source")
     print "\"%s\"" % ("\",\"".join(newrow))
 
     seen_list = []
@@ -266,10 +352,23 @@ def extract_sequences_ds(seq_format):
         if ac not in seen_list:
             seen_list.append(ac)
             if seq_format == "byonic":
-                seq = "%s %s %s" % (ac2comp[ac], "%", mass) if ac in ac2comp else ""
-                if seq.find("Xxx") == -1:
-                    newrow = [ac, seq]
-                    print "\"%s\"" % ("\",\"".join(newrow))
+                seq, related_ac = "", ""
+                if ac in ac2comp_two:
+                    for r_ac in ac2comp_two[ac]:
+                        if ac2comp_two[ac][r_ac].find("Fuc") == -1:
+                            s = ac2comp_two[ac][r_ac]
+                            seq = "%s %s %s" % (s, "%", mass)
+                            related_ac = r_ac
+                            break
+                elif ac in ac2comp_one:
+                    seq = "%s %s %s" % (ac2comp_one[ac], "%", mass)
+                    related_ac = ac
+
+                if seq.find("Xxx") == -1 and seq != "" and seq.find("Fuc") == -1:
+                    newrow = [ac, seq, related_ac]
+                    seq = seq.replace("\"", "'")
+                    if seq.find("+") == -1 and seq.strip() != "%":
+                        print "\"%s\"" % ("\",\"".join(newrow))
             else:
                 in_file = path_obj["downloads"] + "glytoucan/current/export/%s/%s.txt" % (seq_format, ac)
                 if os.path.isfile(in_file) == True:
@@ -277,6 +376,7 @@ def extract_sequences_ds(seq_format):
                         seq = ""
                         for line in FR:
                             seq += " " + line.strip()
+                        seq = seq.replace("\"", "'")
                         newrow = [ac, seq.strip()]
                         print "\"%s\"" % ("\",\"".join(newrow))
 
@@ -329,15 +429,18 @@ def extract_monosaccharide_composition_advanced_ds():
             if monosaccharide != "*":
                 seen_mono[monosaccharide] = True
 
-
     mono_list = sorted(seen_mono.keys()) + ["Count"]
     newrow = ["glytoucan_ac"] + mono_list
     print "\"%s\"" % ("\",\"".join(newrow))
     for ac in count_dict:
         newrow = [ac]
-        for monosaccharide in mono_list:
+        for monosaccharide in mono_list[:-1]:
             n = count_dict[ac][monosaccharide] if monosaccharide in count_dict[ac] else 0
             newrow.append(str(n))
+        monosaccharide = "*"
+        total = count_dict[ac][monosaccharide] if monosaccharide in count_dict[ac] else 0
+        newrow.append(str(total))
+
         print "\"%s\"" % ("\",\"".join(newrow))
 
     return
@@ -460,7 +563,13 @@ def extract_classification_ds():
             source = row[f_list.index("Source")]
             source_id = row[f_list.index("SourceID")]
             glycan_subtype = glycan_class
-            glycan_type = glycan_class.split(" ")[0]
+            for s in ["O-fucose", "O-GlcNAc","O-mannose"]:
+                if glycan_subtype.find(s) == 0:
+                    glycan_subtype = "O-linked " + glycan_subtype
+            for s in ["Keratan"]:
+                if glycan_subtype.find(s) == 0:
+                    glycan_subtype = "GAG " + glycan_subtype
+            glycan_type = glycan_subtype.split(" ")[0]
             if glytoucan_ac not in subtype_dict:
                 subtype_dict[glytoucan_ac] = {}
             o = {"name":glycan_subtype, "source":source, "source_id":source_id}
@@ -492,7 +601,97 @@ def extract_classification_ds():
 
     return
 
-def extract_citations_glycomotif_ds():
+
+def extract_citations_species_ds():
+
+    black_list = get_blacklisted_pmids()
+    glycan_list = load_glycan_masterlist()
+
+    in_file = path_obj["unreviewed"] + "/glycan_species.csv"
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, ",")
+    f_list = data_frame["fields"]
+
+    newrow = ["glytoucan_ac","title","journal_name","publication_date", "authors",
+            "xref_key", "xref_id", "src_xref_key", "src_xref_id", "tax_id", "tax_name"]
+    print "\"%s\"" % ("\",\"".join(newrow))
+    seen = {}
+
+    log_dict = {}
+    log_file = path_obj["logs"] +  "/glycan_citations_species.log"
+    FL = open(log_file, "w")
+
+    for row in data_frame["data"]:
+        glytoucan_ac = row[f_list.index("glytoucan_ac")]
+        xref_key = row[f_list.index("xref_key")]
+        if xref_key in ["glycan_xref_pubmed"]:
+            tax_id = row[f_list.index("tax_id")]
+            tax_name = row[f_list.index("tax_name")]
+            xref_id = row[f_list.index("xref_id")]
+            src_xref_key = row[f_list.index("source")]
+            src_xref_id = row[f_list.index("source_id")]
+            combo_id = "%s %s" % (glytoucan_ac, xref_id)
+            cite_info = libgly.get_citation(xref_id)
+            citerow = cite_info["row"]
+            if citerow != [] and combo_id not in seen:
+                newrow = [glytoucan_ac] + citerow + [xref_key,xref_id, src_xref_key,src_xref_id,tax_id, tax_name]
+                print "\"%s\"" % ("\",\"".join(newrow))
+                seen[combo_id] = True
+            if citerow == [] and xref_id not in log_dict:
+                FL.write("%s,%s\n" % (xref_id, ";".join(cite_info["flaglist"])))
+                log_dict[xref_id] = True
+
+    FL.close()
+
+    return
+
+
+
+
+def extract_citations_biomarkers_ds():
+    
+    black_list = get_blacklisted_pmids()
+    glycan_list = load_glycan_masterlist()
+
+    in_file = path_obj["unreviewed"] + "/glycan_biomarkers.csv"
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, ",")
+    f_list = data_frame["fields"]
+
+    newrow = ["glytoucan_ac","title","journal_name","publication_date", "authors",
+            "xref_key", "xref_id", "src_xref_key", "src_xref_id", "biomarker_id"]
+    print "\"%s\"" % ("\",\"".join(newrow))
+    seen = {}
+
+    log_dict = {}
+    log_file = path_obj["logs"] +  "/glycan_citations_biomarkers.log"
+    FL = open(log_file, "w")
+                
+    for row in data_frame["data"]:
+        glytoucan_ac = row[f_list.index("glytoucan_ac")]
+        xref_key = row[f_list.index("xref_key")]
+        if xref_key in ["glycan_xref_pubmed"]:
+            biomarker_id = row[f_list.index("biomarker_id")]
+            xref_id = row[f_list.index("xref_id")]
+            src_xref_key = row[f_list.index("src_xref_key")]
+            src_xref_id = row[f_list.index("src_xref_id")]
+            combo_id = "%s %s" % (glytoucan_ac, xref_id)
+            cite_info = libgly.get_citation(xref_id)
+            citerow = cite_info["row"]
+            if citerow != [] and combo_id not in seen:
+                newrow = [glytoucan_ac] + citerow + [xref_key,xref_id, src_xref_key,src_xref_id,biomarker_id]
+                print "\"%s\"" % ("\",\"".join(newrow))
+                seen[combo_id] = True
+            if citerow == [] and xref_id not in log_dict:
+                FL.write("%s,%s\n" % (xref_id, ";".join(cite_info["flaglist"])))
+                log_dict[xref_id] = True
+
+    FL.close()
+
+    return
+
+
+def extract_citations_motif_ds():
     black_list = get_blacklisted_pmids()
     glycan_list = load_glycan_masterlist()
 
@@ -501,11 +700,13 @@ def extract_citations_glycomotif_ds():
     libgly.load_sheet(data_frame, in_file, ",")
     f_list = data_frame["fields"]
     
-    FL = open(path_obj["logs"] + "/glycan_citations_glycomotif.log", "w")
+    FL = open(path_obj["logs"] + "/glycan_citations_motif.log", "w")
     newrow = ["glytoucan_ac","title","journal_name","publication_date", "authors",
             "xref_key", "xref_id", "src_xref_key", "src_xref_id"]
     print "\"%s\"" % ("\",\"".join(newrow))
     seen = {}
+    log_dict = {}
+
     for row in data_frame["data"]:
         glytoucan_ac = row[f_list.index("motif_ac_xref")]
         motif_ac = row[f_list.index("motif_ac")]
@@ -517,17 +718,18 @@ def extract_citations_glycomotif_ds():
             src_xref_id = motif_ac
             src_xref_key = "glycan_xref_motif"
             combo_id = "%s %s" % (glytoucan_ac, xref_id)
-            if glytoucan_ac not in glycan_list:
-                FL.write("%s\n" %(glytoucan_ac))
-            citerow = libgly.get_citation(xref_id, path_obj["downloads"] + "ncbi/medline/")
-
+            cite_info = libgly.get_citation(xref_id)
+            citerow = cite_info["row"]
             if citerow != [] and combo_id not in seen:
                 newrow = [glytoucan_ac] + citerow + [xref_key,xref_id, src_xref_key,src_xref_id]
                 print "\"%s\"" % ("\",\"".join(newrow))
                 seen[combo_id] = True
+            if citerow == [] and xref_id not in log_dict:
+                FL.write("%s,%s\n" % (xref_id, ";".join(cite_info["flaglist"])))
+                log_dict[xref_id] = True
 
     FL.close()
-
+    return
 
 
 
@@ -546,20 +748,27 @@ def extract_citations_ncfg_ds():
             "xref_key", "xref_id", "src_xref_key", "src_xref_id"]
     print "\"%s\"" % ("\",\"".join(newrow))
     seen = {}
+    log_dict = {}
     for row in data_frame["data"]:
         glytoucan_ac = row[f_list.index("glytoucan_ac")]
         xref_id = row[f_list.index("evidence")]
         xref_key = "glycan_xref_pubmed"
-        src_xref_id = "GLY_000528"
-        src_xref_key = "glycan_xref_glygen_ds"
+        ds = "glycan_citations_ncfg"
+        src_xref_id = ds2bco[ds] if ds in ds2bco else ""
+        #src_xref_key = "glycan_xref_glygen_ds"
+        src_xref_key = "glycan_xref_data_submission"
         combo_id = "%s %s" % (glytoucan_ac, xref_id)
         if glytoucan_ac not in glycan_list:
             FL.write("%s\n" %(glytoucan_ac))
-        citerow = libgly.get_citation(xref_id, path_obj["downloads"] + "ncbi/medline/")
+        cite_info = libgly.get_citation(xref_id)
+        citerow = cite_info["row"]
         if citerow != [] and combo_id not in seen:
             newrow = [glytoucan_ac] + citerow + [xref_key,xref_id, src_xref_key,src_xref_id]
             print "\"%s\"" % ("\",\"".join(newrow))
             seen[combo_id] = True
+        if citerow == [] and xref_id not in log_dict:
+            FL.write("%s,%s\n" % (xref_id, ";".join(cite_info["flaglist"])))
+            log_dict[xref_id] = True
 
     FL.close()
 
@@ -574,28 +783,70 @@ def extract_citations_glytoucan_ds():
     black_list = get_blacklisted_pmids()
     glycan_list = load_glycan_masterlist()
 
-    in_file = path_obj["downloads"] + "glytoucan/current/export/pubs.tsv"
-    data_frame = {}
-    libgly.load_sheet(data_frame, in_file, "\t")
-    f_list = data_frame["fields"]
 
     newrow = ["glytoucan_ac","title","journal_name","publication_date", "authors",
             "xref_key", "xref_id", "src_xref_key", "src_xref_id"]
     print "\"%s\"" % ("\",\"".join(newrow))
     seen = {}
+    log_dict = {}
+    log_file = path_obj["logs"] +  "glycan_citations_glytoucan.log" 
+    FL = open(log_file, "w")
+
+    file_list = ["unreviewed/glycan_species.csv", "unreviewed/glycan_species_customized_neuac_neugc.csv"]
+    for in_file in file_list:
+        data_frame = {}
+        libgly.load_sheet(data_frame, in_file, ",")
+        f_list = data_frame["fields"]
+        for row in data_frame["data"]:
+            glytoucan_ac = row[f_list.index("glytoucan_ac")]
+            xref_key = row[f_list.index("xref_key")]
+            xref_id =  row[f_list.index("xref_id")]
+            if xref_key.find("_pubmed") == -1 and xref_key.find("_doi") == -1:
+                continue
+
+            source = row[f_list.index("source")]
+            src_xref_key = "glycan_xref_glytoucan"
+            src_xref_id = glytoucan_ac
+            if source.lower() == "unicarbkb":
+                src_xref_key = "glycan_xref_unicarbkb_ds"
+                ds = "glycan_citations_glytoucan"
+                src_xref_id = ds2bco[ds] if ds in ds2bco else ""
+                    
+            combo_id = "%s %s" % (glytoucan_ac, xref_id)
+            cond_list = [glytoucan_ac not in glycan_list and glytoucan_ac != ""]
+            cond_list.append(xref_id in ["0"])
+            cond_list.append(combo_id in seen)
+            if True in cond_list:
+                continue
+            cite_info = libgly.get_citation(xref_id)
+            citerow = cite_info["row"]
+            if citerow != []:
+                newrow = [glytoucan_ac] + citerow + [xref_key,xref_id, src_xref_key,src_xref_id]
+                print "\"%s\"" % ("\",\"".join(newrow))
+                seen[combo_id] = True
+            if citerow == [] and xref_id not in log_dict:
+                FL.write("%s,%s\n" % (xref_id, ";".join(cite_info["flaglist"])))
+                log_dict[xref_id] = True
+
+
+
+    in_file = path_obj["downloads"] + "glytoucan/current/export/pubs.tsv"
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, "\t")
+    f_list = data_frame["fields"]
+
     for row in data_frame["data"]:
         glytoucan_ac = row[f_list.index("GlyTouCanAccession")]
-        xref_key = "protein_xref_pubmed"
+        xref_key = "glycan_xref_pubmed"
         xref_id = row[f_list.index("PubMedID")]
         source = row[f_list.index("Source")]
         source_id = row[f_list.index("SourceID")]
         src_xref_key = "glycan_xref_glytoucan"
         src_xref_id = glytoucan_ac
         if source.lower() == "unicarbkb":
-            src_xref_id = source_id
-            src_xref_key = "glycan_xref_unicarbkb" 
-            if src_xref_id.lower().find("comp_") != -1:
-                src_xref_key = "glycan_xref_unicarbkb_comp"
+            src_xref_key = "glycan_xref_unicarbkb_ds"
+            ds = "glycan_citations_glytoucan"
+            src_xref_id = ds2bco[ds] if ds in ds2bco else ""
 
         original_source_id = ""
         if source_id.find("comp_") != -1:
@@ -610,11 +861,17 @@ def extract_citations_glytoucan_ds():
         cond_list.append(combo_id in seen)
         if True in cond_list:
             continue
-        citerow = libgly.get_citation(xref_id, path_obj["downloads"] + "ncbi/medline/")
+        cite_info = libgly.get_citation(xref_id)
+        citerow = cite_info["row"]
         if citerow != []:
             newrow = [glytoucan_ac] + citerow + [xref_key,xref_id, src_xref_key,src_xref_id]
             print "\"%s\"" % ("\",\"".join(newrow))
             seen[combo_id] = True
+        if citerow == [] and xref_id not in log_dict:
+            FL.write("%s,%s\n" % (xref_id, ";".join(cite_info["flaglist"])))
+            log_dict[xref_id] = True
+
+    FL.close()
 
 
     return
@@ -622,17 +879,38 @@ def extract_citations_glytoucan_ds():
 
 def extract_glytoucanidlist_ds():
 
+    is_archived = {}
+    in_file = path_obj["downloads"] + "glycan_list/current/glytoucan_archived.txt"
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, "\t")
+    f_list = data_frame["fields"]
+    for row in [f_list] + data_frame["data"]:
+        is_archived[row[0]] = True
 
-    newrow = ["glytoucan_ac"]
+    is_replaced = {}
+    in_file = path_obj["downloads"] + "glycan_list/current/glytoucan_replaced.txt"
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, "\t")
+    f_list = data_frame["fields"]
+    for row in [f_list] + data_frame["data"]:
+        current, old = row[0], row[1] 
+        is_replaced[old] = current
+
+
+    newrow = ["glytoucan_ac", "status", "replacement_ac"]
     print "\"%s\"" % ("\",\"".join(newrow))
     data_frame = {}
     in_file = path_obj["downloads"] + "glycan_list/current/glytoucan_allacc.txt"
     libgly.load_sheet(data_frame, in_file, "\t")
     f_list = data_frame["fields"]
-    newrow = [f_list[0]]
-    print "\"%s\"" % ("\",\"".join(newrow))
-    for row in data_frame["data"]:
-        newrow = [row[0]]
+    for row in [f_list] + data_frame["data"]:
+        ac = row[0]
+        status, new_ac = "current", ""
+        if ac in is_archived:
+            status = "discontinued"
+        if ac in is_replaced:
+            status, new_ac = "replaced", is_replaced[ac]
+        newrow = [ac, status, new_ac]
         print "\"%s\"" % ("\",\"".join(newrow))
 
     return
@@ -640,10 +918,65 @@ def extract_glytoucanidlist_ds():
 
 def extract_masterlist_ds():
 
+
+    mono2cid = {}
+    in_file = "generated/misc/monosaccharide_residue_name.csv"
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, ",")
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        mono = row[f_list.index("residue")]
+        mono2cid[mono] = row[f_list.index("cid")]
+
+
+    in_file = "generated/misc/mono_mapping.json"
+    doc = json.loads(open(in_file, "r").read())
+    is_child, is_parent = {}, {}
+    for obj in doc:
+        is_parent[obj["id"]] = True
+        for o in obj["children"]:
+            is_child[o["id"]] = True
+
+    in_file = path_obj["downloads"] + "glytoucan/current/export/redendmono.tsv"
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, "\t")
+    f_list = data_frame["fields"]
+    tmp_dict = {}
+    for row in data_frame["data"]:
+        glytoucan_ac = row[f_list.index("accession")]
+        mono = row[f_list.index("monosaccharide")]
+        if glytoucan_ac not in tmp_dict:
+            tmp_dict[glytoucan_ac] = {}
+        tmp_dict[glytoucan_ac][mono] = True
+
+    gtc2redendmono = {}
+    for glytoucan_ac in tmp_dict:
+        mono_list = tmp_dict[glytoucan_ac].keys()
+        if len(mono_list) > 1:
+            for mono in tmp_dict[glytoucan_ac]:
+                if mono in is_child:
+                    gtc2redendmono[glytoucan_ac] = mono
+        else:
+            gtc2redendmono[glytoucan_ac] = mono_list[0]
+                
+
+    in_file = path_obj["downloads"] + "glytoucan/current/export/pubs.tsv"
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, "\t")
+    f_list = data_frame["fields"]
+    gtc2pmid = {}
+    for row in data_frame["data"]:
+        glytoucan_ac = row[f_list.index("GlyTouCanAccession")]
+        pmid = row[f_list.index("PubMedID")]
+        if glytoucan_ac not in gtc2pmid:
+            gtc2pmid[glytoucan_ac] = {}
+        gtc2pmid[glytoucan_ac][pmid] = True
+
+
     newrow = [
         "glytoucan_ac","glytoucan_type","glycan_mass", "glycan_permass",
         "base_composition","composition","topology","monosaccharides", "is_motif",
-        "missing_score"
+        "missing_score","reducing_end_mono","reducing_end_cid","xref_key", "xref_id"
     ]
     print "\"%s\"" % ("\",\"".join(newrow))
 
@@ -710,10 +1043,23 @@ def extract_masterlist_ds():
         if ac not in seen_list:
             seen_list.append(ac)
             missing_score = missing_score_dict[ac] if ac in missing_score_dict else ""
+            reducing_end_mono = gtc2redendmono[ac] if ac in gtc2redendmono else ""
+            reducing_end_mono_cid = mono2cid[reducing_end_mono] if reducing_end_mono in mono2cid else ""
             emptyrow = [ac, "", "", "", "", "", "", "", ""]
             newrow = prop_dict[ac] if ac in prop_dict else emptyrow
-            newrow = newrow + [str(ac in is_motif), missing_score] 
-            print "\"%s\"" % ("\",\"".join(newrow))
+            pmid_list = []
+            if ac in gtc2pmid:
+                for pmid in gtc2pmid[ac]:
+                    pmid_list.append(pmid)
+            if pmid_list != []:
+                for pmid in pmid_list:
+                    newrow = prop_dict[ac] if ac in prop_dict else emptyrow
+                    newrow = newrow + [str(ac in is_motif), missing_score, reducing_end_mono, reducing_end_mono_cid, "glycan_xref_pubmed", pmid]
+                    print "\"%s\"" % ("\",\"".join(newrow))
+            else:
+                newrow = prop_dict[ac] if ac in prop_dict else emptyrow
+                newrow = newrow + [str(ac in is_motif), missing_score, reducing_end_mono, reducing_end_mono_cid, "", ""]
+                print "\"%s\"" % ("\",\"".join(newrow))
             #Check image files
             img_file = img_dir + "%s.png" % (ac)
             if os.path.isfile(img_file) == False:
@@ -755,12 +1101,15 @@ def extract_type_n_linked_byonic_ds():
 
     newrow = ["glytoucan_ac","byonic"]
     print "\"%s\""  % ("\",\"".join(newrow))
-        
+       
     data_frame = {}
-    in_file = path_obj["downloads"] + "glytoucan/current/export/byonic_glygen_human_nlinked.tsv"
-    libgly.load_sheet(data_frame, in_file, "\t")
-    f_list = data_frame["fields"]
-    for row in data_frame["data"]:
+    in_file = path_obj["downloads"] + "glytoucan/current/export/byonic_glygen_human_nlinked.txt"
+    
+    libgly.load_sheet(data_frame, in_file, ",")
+    
+    f_list = ["Byonic", "GlyTouCanAccession"]
+    first_row = data_frame["fields"]
+    for row in [first_row] + data_frame["data"]:
         ac = row[f_list.index("GlyTouCanAccession")]
         bionic = row[f_list.index("Byonic")]
         if ac in glycan_list:
@@ -837,24 +1186,29 @@ def extract_dictionary_ds():
     for f in f_list:
         if f in ignore_fields:
             continue
+        f = f.replace("\n", "")
         newrow.append(f)
     newrow += ["xref_key","xref_id"]
 
     print "\"%s\""  % ("\",\"".join(newrow))
 
     for row in data_frame["data"]:
-        ac = row[f_list.index("glytoucan_accession")]
-        #if ac not in glycan_list:
-        #    continue
+        ac_list = row[f_list.index("glytoucan_accession")].split("|")
         term = row[0]
         glycan_dictionary_accession = row[f_list.index("glycan_dictionary_accession")]
-        newrow = [ac, term]
+        newrow = [term]
         for f in f_list:
             if f in ignore_fields:
                 continue
             newrow.append(row[f_list.index(f)].replace("\"", "\'"))
         newrow += ["glycan_xref_dictionary", glycan_dictionary_accession]
-        print "\"%s\""  % ("\",\"".join(newrow))
+        for ac in ac_list:
+            ac = ac.strip()
+            if ac == "":
+                continue
+            #if ac not in glycan_list:
+            #    continue
+            print "\"%s\""  % ("\",\"".join([ac] + newrow))
 
 
     return 
@@ -889,6 +1243,23 @@ def extract_species_ds():
             if tax_id.strip() != "" and tax_id not in sourceid2taxid[source_id]:
                 sourceid2taxid[source_id].append(tax_id)
 
+
+    ds_dict = {
+        "glycan_xref_oglcnacatlas":{
+            "9606":"GLY_000708",
+            "10090":"GLY_000709",
+            "10116":"GLY_000710",
+            "7227":"GLY_000711",
+            "4932":"GLY_000800"
+        }
+    }
+
+    is_ref_taxid = {}
+    for sp in species_obj:
+        if species_obj[sp]["is_reference"] == "yes":
+            is_ref_taxid[sp] = True
+    
+    species_map = json.loads(open("generated/misc/species_map.json", "r").read())
     seen = {}
     for row in data_frame["data"]:
         ac = row[f_list.index("GlyTouCan AC")]
@@ -897,23 +1268,38 @@ def extract_species_ds():
         source = row[f_list.index("Source")]
         source_id = row[f_list.index("Source ID")]
         tax_id = row[f_list.index("tax_id")]
-        if tax_id == "11108":
-            tax_id = "63746"
-
         original_source_id = ""
         species = "sarscov2" if species == "SARS" else species
         is_motif = "True" if ac in motif_list else "False"
         if source_id.lower().find("comp_") != -1:
             original_source_id = source_id
-            source_id = "UniCarbKB"
+            #source_id = "UniCarbKB"
         if cat == "Direct":
             tax_name = species_obj[tax_id]["long_name"]
             xref_id = source_id
             xref_key = "glycan_xref_" + source.lower()
+            xref_key = xref_key.replace("biomarkerkb", "biomarkerdb")
             xref_key = "glycan_xref_glygen_ds" if xref_key == "glycan_xref_glygen" else xref_key
-            xref_key = "glycan_xref_unicarbkb_comp" if source_id == "UniCarbKB" else xref_key
+            if xref_id.find("GLY_0") != -1:
+                xref_key = "glycan_xref_glygen_ds"
+            if source_id == "UniCarbKB" or xref_key == "glycan_xref_unicarbkb":
+                xref_id = "GLY_000341"
+                xref_key = "glycan_xref_unicarbkb_ds"
+            if xref_key == "glycan_xref_oglcnacatlas":
+                xref_id = ds_dict[xref_key][tax_id] if tax_id in ds_dict[xref_key] else xref_id
+                xref_key = "glycan_xref_glygen_ds"
+            if xref_key.find("_pubmed") != -1 and xref_id in ["0"]:
+                continue
+            if xref_key == "glycan_xref_embl":
+                xref_id = "10.1101/2023.09.13.557529v1"
+            if source == "PDC-CCRCC":
+                source_id, xref_key, xref_id = "PDC000471", "protein_xref_pdc", "PDC000471"
             newrow = [ac,tax_id,tax_name, cat, source, source_id,original_source_id,
                 xref_key,xref_id]
+
+            hcv_list = ["11103", "3052230"]
+            if tax_id != "" and tax_id not in is_ref_taxid and tax_id not in species_map and tax_id not in hcv_list:
+                continue            
             row_str = json.dumps(newrow)
             if row_str not in seen:
                 is_ref = species_obj[tax_id]["is_reference"] if tax_id in species_obj else "no"
@@ -927,14 +1313,18 @@ def extract_species_ds():
             if source_id in sourceid2taxid:
                 row_list_one, row_list_two, row_list_three = [], [], []
                 for tax_id in sourceid2taxid[source_id]:
-                    if tax_id == "11108":
-                        tax_id = "63746"
                     tax_name_one = species
                     if species.lower() in species_obj:
                         tax_name_one = species_obj[species.lower()]["long_name"]
                     tax_name_two = species_obj[tax_id]["long_name"]
+                    if xref_key.find("_pubmed") != -1 and xref_id in ["0"]:
+                        continue
                     newrow = [ac,tax_id,tax_name_two, cat, source, source_id,original_source_id,
                         xref_key,xref_id]
+                    hcv_list = ["11103", "3052230"]
+                    if tax_id != "" and tax_id not in is_ref_taxid and tax_id not in species_map and tax_id not in hcv_list:
+                        continue
+            
                     if tax_name_one == tax_name_two:
                         row_list_one.append(newrow)
                     elif tax_name_one.find(tax_name_two) != -1:
@@ -972,207 +1362,18 @@ def extract_species_ds():
     return
 
 
+def extract_cfde_data_package_ds():
 
-def extract_species_ds_old():
+    in_file = "downloads/cfde/current/cfde_data_package.zip"
+    cmd = "cp " + in_file + "  unreviewed/all_cfde_data_package.zip"
+    x = commands.getoutput(cmd)
 
-
-    glycan_list = load_glycan_masterlist()
-
-    newrow = ["glytoucan_ac","tax_id","tax_name","annotation_category","source","source_id",
-            "original_source_id", "xref_key", "xref_id"]
-    print "\"%s\""  % ("\",\"".join(newrow))
-
-
-    seen = {}
-    data_frame = {}
-    in_file = path_obj["downloads"] + "glytoucan/current/export/species.tsv"
-    libgly.load_sheet(data_frame, in_file, "\t")
-    f_list = data_frame["fields"]
-
-    #load ann_cat_dict and ann_evd_dict
-    ann_cat_dict = {}
-    ann_evd_dict = {}
-
-
-    for row in data_frame["data"]:
-        ac = row[f_list.index("GlyTouCanAccession")]
-        species = row[f_list.index("Species")]
-        value = row[f_list.index("Value")]
-        if species.find("Category") != -1:
-            sp_name, cat_value = species.split(" ")[0].lower(), value
-            sp_name = "sarscov2" if sp_name == "sars" else sp_name
-            if ac not in ann_cat_dict:
-                ann_cat_dict[ac] = {}
-            if sp_name not in ann_cat_dict[ac]:
-                ann_cat_dict[ac][sp_name] = []
-            ann_cat_dict[ac][sp_name].append(cat_value)
-        elif species.find("Evidence") != -1:
-            sp_name, evd_value = species.split(" ")[0].lower(), value
-            sp_name = "sarscov2" if sp_name == "sars" else sp_name
-            if ac not in ann_evd_dict:
-                ann_evd_dict[ac] = {}
-            if sp_name not in ann_evd_dict[ac]:
-                ann_evd_dict[ac][sp_name] = []
-            ann_evd_dict[ac][sp_name].append(evd_value)
-
-
-    out_list = []
-    ac_list = list(set(ann_evd_dict.keys() + ann_cat_dict.keys()))
-    for ac in ac_list:
-        sp_list = ann_cat_dict[ac].keys() if ac in ann_cat_dict else []
-        sp_list += ann_evd_dict[ac].keys() if ac in ann_evd_dict else []
-        for sp_name in list(set(sp_list)):
-            cat_list = []
-            if ac in ann_cat_dict:
-                cat_list = ann_cat_dict[ac][sp_name] if sp_name in ann_cat_dict[ac] else []
-            
-            evd_list = []
-            if ac in ann_evd_dict:
-                evd_list = ann_evd_dict[ac][sp_name] if sp_name in ann_evd_dict[ac] else []
-
-            
-            for cat in cat_list:
-                if cat == "Subsumption" and sp_name not in ["rat", "hcv"]:
-                    for evd in evd_list:
-                        #tax_id = ""
-                        tax_id = str(species_obj[sp_name]["tax_id"])
-                        tax_name = species_obj[sp_name]["long_name"]
-                        source = "Subsumption"
-                        xref_id = evd.split(" ")[-1]
-                        xref_key = "glycan_xref_subsumption"
-                        source_id = "via " + evd.split(" ")[-1]
-                        newrow = [ac,tax_id,tax_name,cat,source,source_id,"",xref_key,xref_id]
-                        if ac in glycan_list:
-                            newrow_str = ",".join(newrow)
-                            if newrow_str not in seen:
-                                out_list.append(newrow)
-                                seen[newrow_str] = True
-                elif cat == "Composition":
-                    for evd in evd_list:
-                        tax_id = ""
-                        tax_name = species_obj[sp_name]["long_name"]
-                        source = "Composition"
-                        xref_id = evd.split(" ")[-1]
-                        xref_key = "glycan_xref_composition"
-                        source_id = "via " + evd.split(" ")[-1]
-                        newrow = [ac,tax_id,tax_name,cat,source,source_id,"",xref_key,xref_id]
-                        if ac in glycan_list:
-                            newrow_str = ",".join(newrow)
-                            if newrow_str not in seen:
-                                #Stop outputing these rows (Rahi)
-                                #print "\"%s\""  % ("\",\"".join(newrow))
-                                seen[newrow_str] = True
-                elif cat == "Direct":
-                    for evd in evd_list:
-                        if evd.find("GlyTouCan") != -1:
-                            source = "GlyTouCan"
-                            source_id = ac
-                            xref_id = ac
-                            xref_key = "glycan_xref_glytoucan"
-                            tax_id = evd.split(" ")[-1].strip()
-                            tax_name = species_obj[tax_id]["long_name"]
-                            newrow = [ac,tax_id, tax_name,cat, source, source_id, "",
-                                    xref_key, xref_id]
-                            if ac in glycan_list:
-                                newrow_str = ",".join(newrow)
-                                if newrow_str not in seen:
-                                    out_list.append(newrow) 
-                                    seen[newrow_str] = True
-                        elif evd.find("UniCarbKB") != -1:
-                            source = "UniCarbKB"
-                            source_id = evd.split(" ")[-3].split(":")[1]
-                            xref_id = source_id
-                            xref_key = "glycan_xref_unicarbkb"
-                            tax_id = evd.split(" ")[-1].strip()
-                            tax_name = ""
-                            if tax_id in species_obj:
-                                tax_name = species_obj[tax_id]["long_name"]
-                            if source_id.lower().find("comp_") == -1:
-                                original_source_id = ""
-                                newrow = [ac,tax_id, tax_name, cat, source, source_id, 
-                                        original_source_id, xref_key,xref_id]
-                                if ac in glycan_list:
-                                    newrow_str = ",".join(newrow)
-                                    if newrow_str not in seen:
-                                        out_list.append(newrow) 
-                                        seen[newrow_str] = True
-                            else:
-                                original_source_id = source_id
-                                source_id = ""
-                                xref_key = "glycan_xref_unicarbkb_comp"
-                                xref_id = source_id
-                                tax_name = ""
-                                if tax_id in species_obj:
-                                    tax_name = species_obj[tax_id]["long_name"]
-                                newrow = [ac,tax_id, tax_name, cat, source, source_id, 
-                                        original_source_id, xref_key,xref_id]
-                                if ac in glycan_list:
-                                    newrow_str = ",".join(newrow)
-                                    if newrow_str not in seen:
-                                        out_list.append(newrow) 
-                                        seen[newrow_str] = True
-                        #elif evd.find(":") != -1:
-                        elif evd.find("TaxID") != -1:
-                            source = evd.split(" ")[-3].split(":")[0]
-                            source_id = ""
-                            if evd.find(":") != -1:
-                                source_id = evd.split(" ")[-3].split(":")[1]
-                            #original_source_id = source_id
-                            original_source_id = ""
-                            xref_key = "glycan_xref_" + source.lower()
-                            xref_id = source_id
-                            tax_id = evd.split(" ")[-1].strip()
-                            tax_name = ""
-                            if tax_id in species_obj:
-                                tax_name = species_obj[tax_id]["long_name"]
-                            newrow = [ac,tax_id, tax_name, cat, source, source_id,
-                                        original_source_id, xref_key,xref_id]
-                            if ac in glycan_list:
-                                newrow_str = ",".join(newrow)
-                                if newrow_str not in seen:
-                                    out_list.append(newrow) 
-                                    seen[newrow_str] = True
-
-    for newrow in out_list:
-        print "\"%s\""  % ("\",\"".join(newrow))
-    return
-
-
-
-
-    direct_ann_dict = {}
-    for row in out_list:
-        ac, tax_id, tax_name, ann_type = row[0], row[1], row[2], row[3]
-        if ann_type == "Direct":
-            if ac not in direct_ann_dict:
-                direct_ann_dict[ac] = {}
-            direct_ann_dict[ac][tax_id] = tax_name
-    
-    seen_row = {}
-    for row in out_list:
-        ac, tax_id, tax_name, ann_type = row[0], row[1], row[2], row[3]
-        if ann_type == "Subsumption":
-            s_ac = row[5].split(" ")[1]
-            for s_tax_id in direct_ann_dict[s_ac]:
-                newrow = []
-                for v in row:
-                    newrow.append(v)
-                newrow[1] = s_tax_id
-                newrow[2] = direct_ann_dict[s_ac][s_tax_id]
-                row_str = json.dumps(newrow)
-                if row_str not in seen_row:
-                    print "\"%s\""  % ("\",\"".join(newrow))
-                    seen_row[row_str] = True
-        else:
-            newrow = row
-            row_str = json.dumps(newrow)
-            if row_str not in seen_row:
-                print "\"%s\""  % ("\",\"".join(newrow))
-                seen_row[row_str] = True
-
-
+    cmd = "readlink -f " + in_file
+    x = commands.getoutput(cmd)
+    libgly.log_file_usage(x, "", "append")
 
     return
+
 
 
 def extract_compiled_ds(ds_name, filter_flag):
@@ -1188,16 +1389,19 @@ def extract_compiled_ds(ds_name, filter_flag):
     newrow = f_list
     if ds_name == "synthesized":
         #newrow[f_list.index("evidence")] = "xref_id"
-        newrow += ["xref_key", "xref_id"]
+        newrow += ["xref_key", "xref_id", "src_xref_key", "src_xref_id"]
     print "\"%s\""  % ("\",\"".join(newrow))
     for row in data_frame["data"]:
         ac = row[f_list.index("glytoucan_ac")]
         row_list = []
         if ds_name == "synthesized":
             xref_id = row[f_list.index("evidence")]
-            xref_key = "protein_xref_pubmed"
-            row_list.append(row + [xref_key, xref_id])
-            row_list.append(row + ["glycan_xref_glygen_ds", "GLY_000309"])
+            xref_key = "glycan_xref_pubmed"
+            #src_xref_key = "glycan_xref_glygen_ds"
+            src_xref_key = "glycan_xref_data_submission"
+            ds = "glycan_%s" % (ds_name)
+            src_xref_id = ds2bco[ds] if ds in ds2bco else ""
+            row_list.append(row + [xref_key, xref_id, src_xref_key, src_xref_id])
         else:
             row_list.append(row)
 
@@ -1211,7 +1415,7 @@ def extract_compiled_ds(ds_name, filter_flag):
 
     return
 
-def extract_evidence_ncfg_ds():
+def extract_ncfg_ds():
 
     glycan_list = load_glycan_masterlist()
 
@@ -1225,6 +1429,27 @@ def extract_evidence_ncfg_ds():
         ac = row[f_list.index("glytoucan_ac")]
         newrow = row
         if ac in glycan_list:
+            print "\"%s\""  % ("\",\"".join(newrow))
+
+    return
+
+def extract_glygen_mw_xref_mapping_ds():
+
+    glycan_list = load_glycan_masterlist()
+
+    newrow = ["glytoucan_ac","name","pubchem_id", "regno", "glygen_url"]
+    print "\"%s\""  % ("\",\"".join(newrow))
+    in_file = path_obj["downloads"] + "/mw/current/mw_refmet_mapping_result.tsv"
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, "\t")
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        glytoucan_ac = row[f_list.index("glytoucan_ac")]
+        newrow = [glytoucan_ac]
+        for f in ["name","pubchem_id", "regno"]:
+            newrow.append(row[f_list.index(f)])
+        newrow.append("https://glygen.org/glycan/%s" % (glytoucan_ac))
+        if glytoucan_ac in glycan_list:
             print "\"%s\""  % ("\",\"".join(newrow))
 
     return
@@ -1255,7 +1480,10 @@ def extract_xrefs_ds(dataset):
         for row in data_frame["data"]:
             glytoucan_ac = row[f_list.index("glytoucan_ac")]
             newrow = [glytoucan_ac, glytoucan_ac, "glycan_xref_glytoucan"]
-            print "\"%s\""  % ("\",\"".join(newrow))
+            row_str = json.dumps(newrow)
+            if row_str not in seen_row:
+                seen_row[row_str] = True
+                print "\"%s\""  % ("\",\"".join(newrow))
     elif dataset == "xref_rhea":
         cid2rheaid = {}
         in_file = path_obj["downloads"] + "chebi/current/reference.tsv"
@@ -1284,7 +1512,16 @@ def extract_xrefs_ds(dataset):
                     if row_str not in seen_row:
                         print "\"%s\""  % ("\",\"".join(newrow))
                         seen_row[row_str] = True
-
+    elif dataset == "xref_gadr":
+        for obj in json.loads(open("downloads/gadr/current/getglycanidmap.json", "r").read()):
+            glytoucan_ac, xref_id = obj["glytoucanId"], obj["gadrId"]
+            if glytoucan_ac not in glycan_list:
+                continue
+            newrow = [glytoucan_ac,xref_id, "glycan_xref_gadr"]
+            row_str = json.dumps(newrow)
+            if row_str not in seen_row:
+                print "\"%s\""  % ("\",\"".join(newrow))
+                seen_row[row_str] = True
     elif dataset == "xref_gptwiki":
         data_frame = {}
         in_file = path_obj["downloads"] + "/gptwiki/current/glycosites.csv"
@@ -1298,16 +1535,47 @@ def extract_xrefs_ds(dataset):
                 if row_str not in seen_row:
                     print "\"%s\""  % ("\",\"".join(newrow))
                     seen_row[row_str] = True
+    elif dataset == "xref_biomarkerkb":
+        data_frame = {}
+        in_file = path_obj["unreviewed"] + "glycan_biomarkers.csv"
+        libgly.load_sheet(data_frame, in_file, ",")
+        f_list = data_frame["fields"]
+        for row in data_frame["data"]:
+            glytoucan_ac = row[f_list.index("glytoucan_ac")]
+            biomarker_id = row[f_list.index("biomarker_id")]
+            if glytoucan_ac in glycan_list:
+                newrow = [glytoucan_ac, biomarker_id, "glycan_xref_biomarkerkb"]
+                row_str = json.dumps(newrow)
+                if row_str not in seen_row:
+                    print "\"%s\""  % ("\",\"".join(newrow))
+                    seen_row[row_str] = True
     elif dataset == "xref_dictionary":
         data_frame = {}
         in_file = path_obj["downloads"] + "/glycan_dictionary/current/glycan_dictionary.csv"
         libgly.load_sheet(data_frame, in_file, ",")
         f_list = data_frame["fields"]
         for row in data_frame["data"]:
-            glytoucan_ac = row[f_list.index("glytoucan_accession")]
+            ac_list = row[f_list.index("glytoucan_accession")].split("|")
             glycan_dictionary_accession = row[f_list.index("glycan_dictionary_accession")]
+            for glytoucan_ac in ac_list:
+                glytoucan_ac = glytoucan_ac.strip()
+                if glytoucan_ac in glycan_list:
+                    newrow = [glytoucan_ac,glycan_dictionary_accession, "glycan_xref_dictionary"]
+                    row_str = json.dumps(newrow)
+                    if row_str not in seen_row:
+                        print "\"%s\""  % ("\",\"".join(newrow))
+                        seen_row[row_str] = True
+    elif dataset in ["xref_mw"]:
+        data_frame = {}
+        in_file = path_obj["downloads"] + "/mw/current/mw_refmet_mapping_result.tsv"
+        libgly.load_sheet(data_frame, in_file, "\t")
+        f_list = data_frame["fields"]
+        for row in data_frame["data"]:
+            glytoucan_ac = row[f_list.index("glytoucan_ac")]
+            xref_id = row[f_list.index("regno")]
+            xref_key = "glycan_xref_mw"
             if glytoucan_ac in glycan_list:
-                newrow = [glytoucan_ac,glycan_dictionary_accession, "glycan_xref_dictionary"]
+                newrow = [glytoucan_ac,xref_id, xref_key]
                 row_str = json.dumps(newrow)
                 if row_str not in seen_row:
                     print "\"%s\""  % ("\",\"".join(newrow))
@@ -1315,10 +1583,12 @@ def extract_xrefs_ds(dataset):
     elif dataset == "xref_reactome":
         cid2reactomeid = {}
         data_frame = {}
-        in_file = path_obj["downloads"] + "reactome/current/ChEBI2Reactome_PE_Pathway.csv"
-        libgly.load_sheet(data_frame, in_file, ",")
-        f_list = data_frame["fields"]
-        for row in data_frame["data"]:
+        in_file = path_obj["downloads"] + "reactome/current/ChEBI2Reactome_PE_Pathway.txt"
+        libgly.load_sheet(data_frame, in_file, "\t")
+        f_list = ["chebi_id","reactome_compound_id","compound_name","reactome_pathway_id",
+                "reactome_pathway_url","pathway_name","c7","species_scientific_name"]
+        first_row = data_frame["fields"]
+        for row in [first_row] + data_frame["data"]:
             c_id = row[f_list.index("chebi_id")]
             reactome_id = row[f_list.index("reactome_compound_id")]
             if c_id not in cid2reactomeid:
@@ -1343,7 +1613,7 @@ def extract_xrefs_ds(dataset):
         data_frame = {}
         if dataset == "xref_sandbox":
             #in_file = path_obj["unreviewed"] + "/glycan_enzyme.csv"
-            in_file = path_obj["downloads"] + "sandbox/current/sandbox_accessions.csv"
+            in_file = path_obj["downloads"] + "sandbox/current/accessionlist.csv"
             libgly.load_sheet(data_frame, in_file, ",")
         else:
             in_file = path_obj["downloads"] + "glytoucan/current/export/%s.tsv" % (ds_filename)
@@ -1363,8 +1633,11 @@ def extract_xrefs_ds(dataset):
                 xref_key = "glycan_xref_pubchem_compound" if xref_id[0:3] == "CID" else "glycan_xref_pubchem_substance"
             if dataset == "xref_unicarbkb":
                 if xref_id.lower().find("comp_") != -1 or xref_id.lower().find("hex") != -1:
-                    xref_key = "glycan_xref_unicarbkb_comp"
-            
+                    xref_key = "glycan_xref_glygen_ds"
+
+                #UnicarbKB links are breaking for non-digit IDs
+                if xref_id.isdigit() == False:
+                    continue
             if dataset == "xref_glyconnect":
                 ac_type = row[f_list.index("GlyConnectAccessionType")].lower()
                 xref_key = "glycan_xref_" + ac_type
@@ -1410,7 +1683,7 @@ def extract_enzyme_ds():
             canon = row[f_list.index("uniprotkb_canonical_ac")]
             canon2recname[canon] = row[f_list.index("recommended_name_full")]
 
-    newrow = ["glytoucan_ac","residue_name","residue_id","uniprotkb_canonical_ac","gene_name","gene_id","parent_residue_id","enzyme_type","species","recommended_name_full", "xref_key", "xref_id"]
+    newrow = ["glytoucan_ac","residue_name","residue_id","uniprotkb_canonical_ac","uniprotkb_ac","gene_name","gene_id","parent_residue_id","enzyme_type","species","recommended_name_full", "xref_key", "xref_id"]
     print "\"%s\"" % ("\",\"".join(newrow))
 
     data_frame = {}
@@ -1420,8 +1693,11 @@ def extract_enzyme_ds():
     libgly.load_sheet(data_frame, in_file, "\t")
 
 
+
     f_list = data_frame["fields"]
     for row in data_frame["data"]:
+        if len(row) < 3:
+            continue
         val_dict = {}
         for f in f_list:
             val_dict[f] = row[f_list.index(f)]
@@ -1429,12 +1705,13 @@ def extract_enzyme_ds():
             continue
         if val_dict["uniprot"] not in ac2canon:
             continue
-        canon = ac2canon[val_dict["uniprot"]]
+        uniprotkb_ac = val_dict["uniprot"]
+        canon = ac2canon[uniprotkb_ac]
         recname = canon2recname[canon] if canon in canon2recname else ""
         newrow = [
-            val_dict["glytoucan_ac"],val_dict["residue_name"],val_dict["residue_id"],canon,
+            val_dict["glytoucan_ac"],val_dict["residue_name"],val_dict["residue_id"],canon,uniprotkb_ac,
             val_dict["gene_name"],val_dict["gene_id"],val_dict["parent_residue_id"],val_dict["enzyme_type"],
-            val_dict["species"], recname,"glycan_xref_glygen_ds", "GLY_000284"
+            val_dict["species"], recname,"glycan_xref_sandbox", val_dict["glytoucan_ac"]
         ]
         print "\"%s\"" % ("\",\"".join(newrow))
 
@@ -1446,8 +1723,9 @@ def extract_enzyme_ds():
 
 def get_glyco_stats(species_list):
 
+
     used_list = get_used_ds_list()
-    file_list = glob.glob(path_obj["unreviewed"] + "/*glycosylation_sites_*.csv")
+    file_list = glob.glob(path_obj["unreviewed"] + "/*proteoform_glycosylation_sites_*.csv")
     seen = {"glycan":{}, "glycanpos":{}, "pos":{}, "siteinfo":{}}
     for in_file in file_list:
         file_name = in_file.split("/")[-1]
@@ -1467,6 +1745,8 @@ def get_glyco_stats(species_list):
             aa_pos = row[f_list.index("glycosylation_site_uniprotkb")]
             xref_key = row[f_list.index("xref_key")]
             xref_id = row[f_list.index("xref_id")]
+            if gly_type == "":
+                continue
 
             if canon not in seen["pos"]:
                 seen["pos"][canon] = {}
@@ -1531,41 +1811,6 @@ def get_used_ds_list():
 
 
 
-def get_used_ds_list_old():     
-
-    species_list = []
-    for k in species_obj:
-        obj = species_obj[k]
-        if obj["short_name"] not in species_list and obj["is_reference"] == "yes":
-            species_list.append(obj["short_name"])
-
-
-    seen_ds = {}
-    in_file = "generated/misc/protein_datasets.json"
-    file_list_obj = json.loads(open(in_file, "r").read())
-    for cat in file_list_obj:
-        if cat == "common":
-            for species in species_list:
-                for mol in file_list_obj[cat]:
-                    for sheet_name in file_list_obj[cat][mol]:
-                        ds = "%s_%s_%s.csv" % (species, mol, sheet_name)
-                        seen_ds[ds] = True
-        else:
-            for mol in file_list_obj[cat]:
-                for sheet_name in file_list_obj[cat][mol]:
-                    ds = "%s_%s_%s.csv" % (cat, mol, sheet_name)
-                    if cat == "agnostic":
-                        ds = "%s_%s.csv" % (mol, sheet_name)
-                    seen_ds[ds] = True
-
-    in_file = "generated/misc/glycan_datasets.json"
-    file_list_obj = json.loads(open(in_file, "r").read())
-    for sheet_name in file_list_obj["glycan"]:
-        ds = "glycan_%s.csv" % (sheet_name)
-        seen_ds[ds] = True
-
-    return seen_ds.keys()
-
 
 
 
@@ -1585,6 +1830,9 @@ def extract_xref_mapping_ds(ds_name):
         "glygen_pubchem_xref_mapping":{
             "headers":["uniprotkb_ac","refseq_ac", "glycosylation_annotation"]
         },
+        "glygen_mgi_xref_mapping":{
+            "headers":["uniprotkb_ac","mgi_id", "glycosylation_annotation", "url"]
+        },    
         "glygen_iptmnet_xref_mapping":{
             "headers":["uniprotkb_ac", "glycosylation_site_uniprotkb", "amino_acid",
                 "glycosylation_type", "pmid", "glygen_url"
@@ -1592,82 +1840,101 @@ def extract_xref_mapping_ds(ds_name):
         }
     }
 
+
     gtc2cid = {}    
-    in_file = path_obj["unreviewed"] + "/glycan_xref_pubchem.csv"
-    data_frame = {}
-    libgly.load_sheet(data_frame, in_file, ",")
-    f_list = data_frame["fields"]
-    for row in data_frame["data"]:
-        gtc = row[f_list.index("glytoucan_ac")]
-        xref_id = row[f_list.index("xref_id")]
-        xref_key = row[f_list.index("xref_key")]
-        if xref_key == "glycan_xref_pubchem_compound":
-            if gtc not in gtc2cid:
-                gtc2cid[gtc] = []
-            gtc2cid[gtc].append(xref_id)
-
     glycan_site_dict = {}
-    file_list = glob.glob(path_obj["unreviewed"] + "/*_proteoform_glycosylation_sites*.csv")
-    for in_file in file_list:
-        species = in_file.split("/")[-1].split("_")[0]
-        tax_id = species_obj[species]["tax_id"]
-        tax_name = species_obj[species]["long_name"]
-        data_frame = {}
-        libgly.load_sheet(data_frame, in_file, ",")
-        f_list = data_frame["fields"]
-        for row in data_frame["data"]:
-            canon = row[f_list.index("uniprotkb_canonical_ac")]
-            saccharide = row[f_list.index("saccharide")]
-            xref_key = row[f_list.index("xref_key")]
-            if saccharide == "":
-                continue
-            if xref_key not in ["protein_xref_pubmed"]:
-                continue
-            amino_acid = row[f_list.index("amino_acid")]
-            aa_pos = row[f_list.index("glycosylation_site_uniprotkb")]
-            gly_type = row[f_list.index("glycosylation_type")]
-            pmid = row[f_list.index("xref_id")]
-            if canon not in glycan_site_dict:
-                glycan_site_dict[canon] = []
-            if canon not in glycan_site_dict:
-                glycan_site_dict[canon] = []
-            o = {"amino_acid":amino_acid, "aa_pos":aa_pos, "saccharide":saccharide, 
-                    "gly_type":gly_type, "pmid":pmid}
-            glycan_site_dict[canon].append(o)
-
-
-
     uniprotkbac2refseqac = {}
-    file_list = glob.glob(path_obj["unreviewed"] + "/*_protein_xref_refseq.csv")
-    for in_file in file_list:
+    if ds_name in ["glygen_pubchem_xref_mapping"]:
+        in_file = path_obj["unreviewed"] + "/glycan_xref_pubchem.csv"
         data_frame = {}
         libgly.load_sheet(data_frame, in_file, ",")
         f_list = data_frame["fields"]
         for row in data_frame["data"]:
-            uniprotkb_ac = row[f_list.index("uniprotkb_canonical_ac")].split("-")[0]
-            refseq_ac = row[f_list.index("xref_id")]
-            uniprotkbac2refseqac[uniprotkb_ac] = refseq_ac
+            gtc = row[f_list.index("glytoucan_ac")]
+            xref_id = row[f_list.index("xref_id")]
+            xref_key = row[f_list.index("xref_key")]
+            if xref_key == "glycan_xref_pubchem_compound":
+                if gtc not in gtc2cid:
+                    gtc2cid[gtc] = []
+                gtc2cid[gtc].append(xref_id)
 
-
-    canon_dict = {}
-    ac2canon = {}
-    file_list = glob.glob(path_obj["unreviewed"] + "/*_protein_masterlist.csv")
-    for in_file in file_list:
-        species = in_file.split("/")[-1].split("_")[0]
-        tax_id = species_obj[species]["tax_id"]
-        tax_name = species_obj[species]["long_name"]
-        data_frame = {}
-        libgly.load_sheet(data_frame, in_file, ",")
-        f_list = data_frame["fields"]
-        for row in data_frame["data"]:
-            canon = row[f_list.index("uniprotkb_canonical_ac")]
-            ac = canon.split("-")[0]
+        file_list = glob.glob(path_obj["unreviewed"] + "/*_proteoform_glycosylation_sites*.csv")
+        for in_file in file_list:
+            species = in_file.split("/")[-1].split("_")[0]
+            tax_id = species_obj[species]["tax_id"]
             tax_name = species_obj[species]["long_name"]
-            canon_dict[canon] = {"ac":ac, "taxid":tax_id, "taxname":tax_name}
-            ac2canon[ac] = canon
+            data_frame = {}
+            libgly.load_sheet(data_frame, in_file, ",")
+            f_list = data_frame["fields"]
+            for row in data_frame["data"]:
+                canon = row[f_list.index("uniprotkb_canonical_ac")]
+                saccharide = row[f_list.index("saccharide")]
+                xref_key = row[f_list.index("xref_key")]
+                if saccharide == "":
+                    continue
+                if xref_key not in ["protein_xref_pubmed"]:
+                    continue
+                amino_acid = row[f_list.index("amino_acid")]
+                aa_pos = row[f_list.index("glycosylation_site_uniprotkb")]
+                start_pos = row[f_list.index("start_pos")]
+                end_pos = row[f_list.index("end_pos")]
+                start_aa = row[f_list.index("start_aa")]
+                end_aa = row[f_list.index("end_aa")]
+                gly_type = row[f_list.index("glycosylation_type")]
+                pmid = row[f_list.index("xref_id")]
+                if canon not in glycan_site_dict:
+                    glycan_site_dict[canon] = []
+                if canon not in glycan_site_dict:
+                    glycan_site_dict[canon] = []
+                o = {"amino_acid":amino_acid, "aa_pos":aa_pos, "saccharide":saccharide, 
+                    "gly_type":gly_type, "pmid":pmid,
+                    "start_pos":start_pos, "end_pos":end_pos, "start_aa":start_aa, "end_aa":end_aa
+                }
+                glycan_site_dict[canon].append(o)
+
+        file_list = glob.glob(path_obj["unreviewed"] + "/*_protein_xref_refseq.csv")
+        for in_file in file_list:
+            data_frame = {}
+            libgly.load_sheet(data_frame, in_file, ",")
+            f_list = data_frame["fields"]
+            for row in data_frame["data"]:
+                uniprotkb_ac = row[f_list.index("uniprotkb_canonical_ac")].split("-")[0]
+                uniprotkbac2refseqac[uniprotkb_ac] = row[f_list.index("xref_id")]
+
+
+
+    uniprotkbac2mgi = {}
+    if ds_name in ["glygen_mgi_xref_mapping"]:
+        file_list = glob.glob(path_obj["unreviewed"] + "/*_protein_xref_mgi.csv")
+        for in_file in file_list:
+            data_frame = {}
+            libgly.load_sheet(data_frame, in_file, ",")
+            f_list = data_frame["fields"]
+            for row in data_frame["data"]:
+                uniprotkb_ac = row[f_list.index("uniprotkb_canonical_ac")].split("-")[0]
+                uniprotkbac2mgi[uniprotkb_ac] = row[f_list.index("xref_id")]
+
+    ac2canon = {}
+    if ds_name in ["glygen_pharos_xref_mapping"]:
+        file_list = glob.glob(path_obj["unreviewed"] + "/*_protein_masterlist.csv")
+        for in_file in file_list:
+            species = in_file.split("/")[-1].split("_")[0]
+            tax_id = species_obj[species]["tax_id"]
+            tax_name = species_obj[species]["long_name"]
+            data_frame = {}
+            libgly.load_sheet(data_frame, in_file, ",")
+            f_list = data_frame["fields"]
+            for row in data_frame["data"]:
+                canon = row[f_list.index("uniprotkb_canonical_ac")]
+                ac = canon.split("-")[0]
+                tax_name = species_obj[species]["long_name"]
+                ac2canon[ac] = canon
+
+
 
     seen_row = {}
-    if ds_name in ["glygen_uniprotkb_xref_mapping", "glygen_genecards_xref_mapping", "glygen_pubchem_xref_mapping"]:
+    if ds_name in ["glygen_uniprotkb_xref_mapping", "glygen_genecards_xref_mapping", 
+                    "glygen_pubchem_xref_mapping", "glygen_mgi_xref_mapping"]:
         sp_list = ["human"] if ds_name == "glygen_genecards_xref_mapping" else []
         glyco_stats = get_glyco_stats(sp_list)
 
@@ -1676,8 +1943,10 @@ def extract_xref_mapping_ds(ds_name):
             print "%s" % ("\t".join(newrow))
         elif ds_name == "glygen_genecards_xref_mapping": 
             print "%s"  % ("\t".join(newrow))
+        elif ds_name == "glygen_mgi_xref_mapping":
+            print "%s" % ("\t".join(newrow))
         elif ds_name == "glygen_pubchem_xref_mapping":
-            newrow += ["amino_acid","glycosylation_site_uniprotkb",
+            newrow += ["start_pos","end_pos","start_aa","end_aa",
                     "saccharide","pubchem_cid","glycosylation_type","pmid"]
             print "\"%s\"" % ("\",\"".join(newrow))
         for canon in glyco_stats["glycan"]:
@@ -1704,10 +1973,10 @@ def extract_xref_mapping_ds(ds_name):
                 refseq_ac = uniprotkbac2refseqac[newrow[0]] if newrow[0] in uniprotkbac2refseqac else ""
                 newrow = [newrow[0], refseq_ac, newrow[1]]
                 if canon not in glycan_site_dict:
-                    newnewrow = newrow +  ["","","","","",""]
+                    newnewrow = newrow +  ["", "", "","","","","",""]
                     row_str = json.dumps(newnewrow)
-                    if row_str not in seen_row:
-                        print "\"%s\"" % ("\",\"".join(newnewrow))
+                    if row_str not in seen_row and newnewrow[0] != "":
+                        #print "\"%s\"" % ("\",\"".join(newnewrow))
                         seen_row[row_str] = True
                 else:
                     
@@ -1716,17 +1985,22 @@ def extract_xref_mapping_ds(ds_name):
                         if gtc not in gtc2cid:
                             continue
                         for cid in gtc2cid[gtc]:
-                            newnewrow = newrow +  [o["amino_acid"],o["aa_pos"],o["saccharide"],
-                                    cid,o["gly_type"],o["pmid"]]
+                            newnewrow = newrow + [o["start_pos"], o["end_pos"], o["start_aa"], o["end_aa"]] + [o["saccharide"],cid,o["gly_type"],o["pmid"]]
                             row_str = json.dumps(newnewrow)
-                            if row_str not in seen_row:
-                                #print "Robel-3", canon, gtc, cid
+                            if row_str not in seen_row and newnewrow[0] != "":
                                 print "\"%s\"" % ("\",\"".join(newnewrow))
                                 seen_row[row_str] = True
             elif ds_name == "glygen_genecards_xref_mapping":
                 glygen_url = "https://glygen.org/protein/%s" % (newrow[0])
                 newrow.append(glygen_url)
                 print "%s" % ("\t".join(newrow))
+            elif ds_name == "glygen_mgi_xref_mapping":
+                uniprotkb_ac = newrow[0]
+                mgi_id = uniprotkbac2mgi[uniprotkb_ac] if uniprotkb_ac in uniprotkbac2mgi else ""
+                glygen_url = "https://glygen.org/protein/%s#Glycosylation" % (newrow[0])
+                newrow.append(glygen_url)
+                if uniprotkb_ac != "" and mgi_id != "":
+                    print "%s" % ("\t".join([uniprotkb_ac, "MGI:"+mgi_id] + newrow[1:]))
             else:
                 print "%s" % ("\t".join(newrow))
     elif ds_name == "glygen_iptmnet_xref_mapping":
@@ -1773,6 +2047,7 @@ def extract_xref_chebi_ds():
     newrow = ["glytoucan_ac","xref_id","xref_key"]
     print "\"%s\""  % ("\",\"".join(newrow))
 
+    seen_row = {}
     chebi2inchi = {}
     in_file = path_obj["downloads"] + "chebi/current/database_accession.tsv"
     data_frame = {}
@@ -1780,7 +2055,7 @@ def extract_xref_chebi_ds():
     f_list = data_frame["fields"]
     for row in data_frame["data"]:
         source = row[f_list.index("SOURCE")]
-        if source != "GlyTouCan":
+        if source not in ["GlyTouCan", "GlyGen"]:
             continue
         glytoucan_ac = row[f_list.index("ACCESSION_NUMBER")]
         xref_id = row[f_list.index("COMPOUND_ID")]
@@ -1788,7 +2063,10 @@ def extract_xref_chebi_ds():
         if glytoucan_ac not in glycan_list:
             continue
         newrow = [glytoucan_ac, xref_id, xref_key]
-        print "\"%s\"" % ("\",\"".join(newrow))
+        row_str = json.dumps(newrow)
+        if row_str not in seen_row:
+            seen_row[row_str] = True
+            print "\"%s\""  % ("\",\"".join(newrow))
 
     return
 
@@ -1827,15 +2105,12 @@ def extract_sequences_smiles_isomeric_ds():
     return
 
 
-
-
 def extract_sequences_inchi_ds():
 
     glycan_list = load_glycan_masterlist()
-
     cid2glytoucan = {}
     data_frame = {}
-    in_file = path_obj["unreviewed"] + "glycan_xref_pubchem.csv" 
+    in_file = path_obj["unreviewed"] + "glycan_xref_pubchem.csv"
     libgly.load_sheet(data_frame, in_file, ",")
     f_list = data_frame["fields"]
     for row in data_frame["data"]:
@@ -1843,26 +2118,66 @@ def extract_sequences_inchi_ds():
         xref_key = row[f_list.index("xref_key")]
         xref_id = row[f_list.index("xref_id")]
         if xref_key == "glycan_xref_pubchem_compound":
-            cid2glytoucan[xref_id] = ac
-
+            if xref_id not in cid2glytoucan:
+                cid2glytoucan[xref_id] = {}
+            cid2glytoucan[xref_id][ac] = True
 
     newrow = ["glytoucan_ac","sequence_inchi","inchi_key"]
     print "\"%s\"" % ("\",\"".join(newrow))
 
-    data_frame = {}
-    in_file = "compiled/cid2inchi.csv"
-    libgly.load_sheet(data_frame, in_file, ",")
-    f_list = data_frame["fields"]
-    for row in data_frame["data"]:
-        cid = row[f_list.index("pubchem_cid")]
-        inchi = row[f_list.index("inchi")]
-        inchikey = row[f_list.index("inchikey")]
-        if cid in cid2glytoucan:
-            glytoucan_ac = cid2glytoucan[cid]
-            if glytoucan_ac in glycan_list:
-                newrow = [glytoucan_ac, inchi, inchikey]
-                print "\"%s\"" % ("\",\"".join(newrow))
+    in_file = "downloads/pubchem/compound/current/CID-InChI-Key.gz"
+    cmd = "readlink -f " + in_file
+    x = commands.getoutput(cmd)
+    libgly.log_file_usage(x, "", "append")
 
+    with gzip.open(in_file, 'rb') as FR:
+        for line in FR:
+            row = line.decode("utf-8").strip().split("\t")
+            cid, inchi, inchikey = row[0], row[1], row[2]
+            if cid not in cid2glytoucan:
+                continue
+            if cid in cid2glytoucan:
+                for glytoucan_ac in cid2glytoucan[cid]:
+                    if glytoucan_ac in glycan_list:
+                        newrow = [glytoucan_ac, inchi, inchikey]
+                        print "\"%s\"" % ("\",\"".join(newrow))
+    return
+
+
+def extract_disease_tree_ds():
+
+
+    parent_dict = {}
+    lbl_dict = {}
+    in_file = "generated/sparql/disease/disease.nt"
+    with open(in_file, "r") as FR:
+        for line in FR:
+            parts = line.strip().split(" ")
+            if parts[1] == "<http://www.w3.org/2000/01/rdf-schema#label>":
+                do_id = parts[0].split("/")[-1].replace(">", "")
+                lbl = line.strip().split("\"")[1]
+                if do_id.find("DOID_") != -1:
+                    lbl_dict[do_id] = lbl
+
+            if parts[1] != "<http://www.w3.org/2000/01/rdf-schema#subClassOf>":
+                continue
+            if parts[0].find("DOID_") == -1 or parts[2].find("DOID_") == -1:
+                continue
+            child = parts[0].split("/")[-1].replace(">", "")
+            parent = parts[2].split("/")[-1].replace(">", "")
+            if child not in parent_dict:
+                parent_dict[child] = {}
+            parent_dict[child][parent]= True
+
+
+    newrow = ["disease_id","disease_name","parent_disease_id", "parent_disease_name"]
+    print "\"%s\""  % ("\",\"".join(newrow))
+    for child in parent_dict:
+        child_lbl = lbl_dict[child]
+        for parent in parent_dict[child]:
+            parent_lbl = lbl_dict[parent]
+            newrow = [child, child_lbl, parent, parent_lbl]         
+            print "\"%s\""  % ("\",\"".join(newrow))
 
     return
 
@@ -1884,7 +2199,7 @@ def extract_disease_names_ds():
     mondo2desc = {}
     seen_row = {}
 
-    mondo_obj = json.loads(open(path_obj["downloads"] + "ohsu/mondo.json", "r").read())
+    mondo_obj = json.loads(open(path_obj["downloads"] + "mondo/current/mondo.json", "r").read())
     for g_obj in mondo_obj["graphs"]:
         for n_obj in g_obj["nodes"]:
             mondo_id = n_obj["id"].split("/")[-1]
@@ -1918,7 +2233,7 @@ def extract_disease_names_ds():
             seen_row[row_str] = True
         if m_id in mondo2synonym:
             for syn in mondo2synonym[m_id]:
-                syn = syn.encode('ascii', 'ignore').decode('ascii').replace("\n", "")
+                syn = syn.encode('ascii', 'ignore').decode('ascii').replace("\n", "").replace("\"", "'")
                 newrow = [m_id, "mondo", "synonym", syn, ""]
                 row_str = json.dumps(newrow)
                 if row_str not in seen_row:
@@ -1996,7 +2311,12 @@ def extract_disease_idmap_ds():
     mondoid2doid = {}
     doid2mondoid = {}
 
-    mondo_obj = json.loads(open(path_obj["downloads"] + "ohsu/mondo.json", "r").read())
+    in_file = path_obj["downloads"] + "mondo/current/mondo.json"
+    cmd = "readlink -f " + in_file
+    x = commands.getoutput(cmd)
+    libgly.log_file_usage(x, "", "append")
+
+    mondo_obj = json.loads(open(in_file, "r").read())
     for g_obj in mondo_obj["graphs"]:
         for n_obj in g_obj["nodes"]:
             mondo_id = n_obj["id"].split("/")[-1]
@@ -2039,6 +2359,7 @@ def extract_disease_idmap_ds():
     }
     
     sparqlutil.load_do_mapping(data_grid)
+
     xref_key = "omim"
     for xref_id in data_grid["mimid2doid"]:
         for do_id in data_grid["mimid2doid"][xref_id]:
@@ -2049,6 +2370,7 @@ def extract_disease_idmap_ds():
                 xrefid2doid[xref_key][xref_id] = []
             if do_id not in xrefid2doid[xref_key][xref_id]:
                 xrefid2doid[xref_key][xref_id].append(do_id)
+
 
     row_list_one = []
     row_list_two = []
@@ -2136,85 +2458,6 @@ def extract_disease_idmap_ds():
 
 
 
-def extract_domap_dsold():
-
-
-    data_grid = {
-        "mimid2doid":{},
-        "doid2icd10cm":{},
-        "doid2icd9cm":{},
-        "doid2kegg":{},
-        "doid2mesh":{},
-        "doid2umls":{},
-        "doid2name":{},
-        "doid2altname":{},
-        "doid2def":{},
-        "doid2mondo":{}
-    }
-
-    mondo_obj = json.loads(open(path_obj["downloads"] + "ohsu/mondo.json", "r").read())
-    for g_obj in mondo_obj["graphs"]:
-        for n_obj in g_obj["nodes"]:
-            mondo_id = n_obj["id"].split("/")[-1]
-            if "meta" in n_obj:
-                if "xrefs" in n_obj["meta"]:
-                    for xref in n_obj["meta"]["xrefs"]:
-                        if mondo_id[0:6] == "MONDO_" and xref["val"][0:5] == "DOID:":
-                            do_id = xref["val"][5:]
-                            if do_id not in data_grid["doid2mondo"]:
-                                data_grid["doid2mondo"][do_id] = []
-                            data_grid["doid2mondo"][do_id].append(mondo_id[6:])
-    sparqlutil.load_do_mapping(data_grid)
-
-    row = ["do_id", "do_name", "xref_key", "xref_id"]
-    print "\"%s\""  % ("\",\"".join(row))
-            
-    for do_id in data_grid["doid2name"]:
-        for do_name in sorted(set(data_grid["doid2name"][do_id])):
-            row = [do_id, do_name]
-            for k in ["doid2kegg", "doid2icd10cm", "doid2icd9cm", "doid2mesh", "doid2umls", "doid2mondo"]:
-                if do_id in data_grid[k]:
-                    for db_id in sorted(set(data_grid[k][do_id])):
-                        target = "protein_xref_" + k[5:]
-                        newrow = row + [target, db_id]
-                        print "\"%s\""  % ("\",\"".join(newrow))
-
-
-    seen  = {}
-    for in_file in glob.glob("compiled/*_protein_disease.csv"):
-        data_frame = {}
-        libgly.load_sheet(data_frame, in_file, ",")
-        f_list = data_frame["fields"]
-        for row in data_frame["data"]:
-            xref_key  = row[f_list.index("xref_key")]
-            xref_id  = row[f_list.index("xref_id")]
-            if xref_key == "protein_xref_glygen_ds":
-                do_id =  row[f_list.index("do_id")]
-                if do_id not in seen:
-                    do_name = ""
-                    if do_id in data_grid["doid2name"]:
-                        do_name = data_grid["doid2name"][do_id][0]
-                    newrow = [do_id, do_name,xref_key, xref_id]
-                    print "\"%s\""  % ("\",\"".join(newrow))
-                    seen[do_id] = True
-
-    seen = {}
-    for mim_id in data_grid["mimid2doid"]:
-        for do_id in data_grid["mimid2doid"][mim_id]:
-            for do_name in sorted(set(data_grid["doid2name"][do_id])):
-                mim_id = mim_id.replace("PS", "")
-                combo_id = "%s %s" % (do_id, mim_id)
-                if combo_id not in seen:
-                    newrow = [do_id, do_name, "protein_xref_omim", mim_id]
-                    print "\"%s\""  % ("\",\"".join(newrow))
-                    seen[combo_id] = True
-
-
-
-
-
-    return
-
 
 
 def load_canon2xref(in_file, map_dict_one, map_dict_two):
@@ -2260,23 +2503,33 @@ def extract_names_ds():
 def extract_homolog_clusters_ds():
 
 
-    work_book = {}
-    xref2canon = {"geneid":{}, "hgnc":{}, "mgi":{}, "oma":{}}
-    canon2xref = {"geneid":{}, "hgnc":{}, "mgi":{}, "oma":{}}
 
-    
-    xref = "hgnc"
-    in_file = path_obj["unreviewed"] +  "human_protein_xref_hgnc.csv"
-    load_canon2xref(in_file, xref2canon[xref], canon2xref[xref])
+    #tax_id,short_name,long_name,common_name,glygen_name,nt_file,is_reference,sort_order,main_xref_ds
 
-    xref = "mgi"
-    in_file = path_obj["unreviewed"] +  "mouse_protein_xref_mgi.csv"
-    load_canon2xref(in_file, xref2canon[xref], canon2xref[xref])
+    xref2canon = {"geneid":{}, "oma":{}}
+    canon2xref = {"geneid":{}, "oma":{}}
+
+    taxid2xref = {}
+    in_file = "generated/misc/species_info.csv"
+    sheet_obj = {}
+    libgly.load_sheet(sheet_obj, in_file, ",")
+    f_list = sheet_obj["fields"]
+    for row in sheet_obj["data"]:
+        tax_id = row[f_list.index("tax_id")]
+        main_xref_ds = row[f_list.index("main_xref_ds")].strip()
+        if main_xref_ds == "":
+            continue
+        xref = main_xref_ds.split("_")[-1].replace(".csv", "")
+        taxid2xref[tax_id] = xref
+        if xref not in xref2canon:
+            xref2canon[xref], canon2xref[xref] = {}, {}
+        xref_file = path_obj["unreviewed"] + main_xref_ds
+        load_canon2xref(xref_file, xref2canon[xref], canon2xref[xref])
+
 
     xref = "oma"
     for in_file in glob.glob(path_obj["unreviewed"] + "*_protein_xref_oma.csv"):
         load_canon2xref(in_file, xref2canon[xref], canon2xref[xref])
-
     xref = "geneid"
     for in_file in glob.glob(path_obj["unreviewed"] + "*_protein_xref_geneid.csv"):
         load_canon2xref(in_file, xref2canon[xref], canon2xref[xref])
@@ -2300,51 +2553,37 @@ def extract_homolog_clusters_ds():
 
     out_rows = []
     seen_out_row = {}
-    in_file = path_obj["downloads"] + "mgi/current/mgi_homologs.csv"
-    if os.path.isfile(in_file) == True:
+
+    # This is old using mgi/current/mgi_homologs.tsv 
+    #in_file = path_obj["downloads"] + "mgi/current/mgi_homologs.tsv"
+    if False:
         sheet_obj = {}
-        libgly.load_sheet(sheet_obj, in_file, ",")
+        libgly.load_sheet(sheet_obj, in_file, "\t")
         f_list = sheet_obj["fields"]
         homolog_dict = {}
         homologene2hgnc = {}
         homologene2mgi = {}
         homologene2taxid = {}
         for row in sheet_obj["data"]:
-            #homologene_id = row[f_list.index("HomoloGene ID")]
             homologene_id = row[f_list.index("DB Class Key")]
             tax_id = row[f_list.index("NCBI Taxon ID")]
             gene_id = row[f_list.index("EntrezGene ID")]
-            #hgnc_id = row[f_list.index("HGNC ID")].split(":")[-1]
-            #mgi_id = row[f_list.index("Mouse MGI ID")].split(":")[-1]
             if gene_id in xref2canon["geneid"] and tax_id in ["9606", "10090", "10116"]:
                 if homologene_id not in homologene2taxid:
                     homologene2taxid[homologene_id] = []
                 if tax_id not in homologene2taxid[homologene_id]:
                     homologene2taxid[homologene_id].append(tax_id)
                 canon = xref2canon["geneid"][gene_id]
-                
                 if homologene_id not in homolog_dict:
                     homolog_dict[homologene_id] = []
                 homolog_dict[homologene_id].append({"canon":canon, "taxid": tax_id})
-
-                #if tax_id == "9606":
-                #    homologene2hgnc[homologene_id] = hgnc_id
-                #elif tax_id == "10090":
-                #    homologene2mgi[homologene_id] = mgi_id
-        
         for homologene_id in homolog_dict:
             if homologene_id == "":
                 continue
-            #hgnc_id = homologene2hgnc[homologene_id] if homologene_id in homologene2hgnc else ""
-            #mgi_id = homologene2mgi[homologene_id] if homologene_id in homologene2mgi else ""
-            
             seen_taxid = {}
             homolog_set = []
             for obj in homolog_dict[homologene_id]:
-                #if obj["taxid"] not in seen_taxid:
-                #seen_taxid[obj["taxid"]] = True
                 homolog_set.append(obj)
-            
             if len(homolog_set) > 1:
                 for obj in homolog_set:
                     tax_id = obj["taxid"]
@@ -2353,32 +2592,98 @@ def extract_homolog_clusters_ds():
                             homologene_id]
                     out_rows.append(row)
 
-    for in_file in glob.glob(path_obj["downloads"] + "oma/current/*.csv"):
-        species_one = in_file.split("/")[-1].split("_")[0]
-        species_two = in_file.split("/")[-1].split("_")[1]
-        tax_id_one = str(species_obj[species_one]["tax_id"])
-        tax_id_two = str(species_obj[species_two]["tax_id"])
-        tax_name_one = species_obj[species_one]["long_name"]
-        tax_name_two = species_obj[species_two]["long_name"]
-
-        peptide_map = {}
-        sheet_obj = {}
-        libgly.load_sheet(sheet_obj, in_file, ",")
-        f_list = sheet_obj["fields"]
-        for row in sheet_obj["data"]:
-
-            oma_group = row[f_list.index("oma_group")]
-            if oma_group == "":
+    in_file = "downloads/alliance_genome/current/ORTHOLOGY-ALLIANCE_COMBINED.tsv"
+    # Gene1ID Gene1Symbol Gene1SpeciesTaxonID Gene1SpeciesName    
+    # Gene2ID Gene2Symbol Gene2SpeciesTaxonID Gene2SpeciesName    
+    # Algorithms  AlgorithmsMatch OutOfAlgorithms IsBestScore IsBestRevScore
+    homolog_dict = {}
+    
+    with open(in_file, "r") as FR:
+        lcount = 0
+        f_list = []
+        for line in FR:
+            if line[0] == "#":
                 continue
-            #if row[f_list.index("ortholog_subtype")] in ["1:1", "1:01"]:
-            peptide_one = row[0].split(".")[0]
-            peptide_two = row[1].split(".")[0]
-            #print "Robel", row
-            #print "Robel", peptide_one, peptide_two, peptide_one in pepid2canon, peptide_two in pepid2canon
-            if peptide_one in pepid2canon and peptide_two in pepid2canon:
-                canon_one, canon_two = pepid2canon[peptide_one], pepid2canon[peptide_two]
-                out_rows.append([oma_group,canon_one,tax_id_one, "protein_xref_oma", oma_group])
-                out_rows.append([oma_group,canon_two,tax_id_two,  "protein_xref_oma",oma_group])
+            lcount += 1
+            if lcount == 1:
+                f_list = line.split("\t")
+            else:
+                row = line.split("\t")
+                rep_id = row[f_list.index("Gene1ID")]
+                rep_gene_id = row[f_list.index("Gene1ID")].split(":")[1]
+                rep_tax_id = row[f_list.index("Gene1SpeciesTaxonID")].replace("NCBITaxon:", "")
+                member_gene_id = row[f_list.index("Gene2ID")].split(":")[1]
+                member_tax_id = row[f_list.index("Gene2SpeciesTaxonID")].replace("NCBITaxon:", "")
+                if rep_tax_id not in taxid2xref or member_tax_id not in taxid2xref:
+                    continue
+                rep_xref = taxid2xref[rep_tax_id]
+                member_xref = taxid2xref[member_tax_id] 
+                #print rep_id, member_gene_id, member_tax_id, member_gene_id in xref2canon["geneid"]
+                if rep_gene_id not in xref2canon[rep_xref] or member_gene_id not in xref2canon[member_xref]:
+                    continue
+                rep_canon = xref2canon[rep_xref][rep_gene_id]
+                member_canon = xref2canon[member_xref][member_gene_id]
+                if rep_id not in homolog_dict:
+                    o = {"canon":rep_canon, "taxid":rep_tax_id}
+                    homolog_dict[rep_id] = [o]
+                o = {"canon":member_canon, "taxid": member_tax_id}
+                homolog_dict[rep_id].append(o)
+    
+    for rep_id in homolog_dict:
+        if len(homolog_dict[rep_id]) > 1:
+            for o in homolog_dict[rep_id]:
+                row = [rep_id, o["canon"],o["taxid"],"protein_xref_agr_homologset",rep_id]
+                out_rows.append(row)
+
+
+    ac2canon = {}
+    file_list = glob.glob(path_obj["unreviewed"] + "/*_protein_masterlist.csv")
+    for in_file in file_list:
+        data_frame = {}
+        libgly.load_sheet(data_frame, in_file, ",")
+        f_list = data_frame["fields"]
+        for row in data_frame["data"]:
+            canon = row[f_list.index("uniprotkb_canonical_ac")]
+            ac = canon.split("-")[0]
+            ac2canon[ac] = canon
+            for f in ["reviewed_isoforms","unreviewed_isoforms"]:
+                ac = row[f_list.index(f)].split("-")[0]
+                ac2canon[ac] = canon
+
+
+    omaid2ac = {}
+    in_file = path_obj["downloads"] + "oma/current/oma-uniprot.txt"
+    with open(in_file, "r") as FR:
+        for line in FR:
+            if line[0] == "#":
+                continue
+            row = line.strip().split("\t")
+            oma_id, ac = row[0], row[1]
+            if ac not in ac2canon:
+                continue
+            if oma_id not in omaid2ac:
+                omaid2ac[oma_id] = {}
+            omaid2ac[oma_id][ac] = True
+    
+
+    for in_file in glob.glob(path_obj["downloads"] + "oma/current/*.json"):
+        doc = json.loads(open(in_file, "r").read())
+        for obj in doc:
+            o_one, o_two = obj["entry_1"], obj["entry_2"]
+            oma_id_one, canonical_id_one = o_one["omaid"], o_one["canonicalid"]
+            tax_id_one = str(o_one["species"]["taxon_id"])
+            oma_group_one = str(o_one["oma_group"])
+            oma_id_two, canonical_id_two = o_two["omaid"], o_two["canonicalid"]
+            tax_id_two = str(o_two["species"]["taxon_id"])
+            oma_group_two = str(o_two["oma_group"])
+            ac_list_one = omaid2ac[oma_id_one].keys() if oma_id_one in omaid2ac else []
+            ac_list_two = omaid2ac[oma_id_two].keys() if oma_id_two in omaid2ac else []
+            for ac_one in ac_list_one:
+                canon_one = ac2canon[ac_one]
+                out_rows.append([oma_group_one,canon_one,tax_id_one, "protein_xref_oma", oma_group_one])
+            for ac_two in ac_list_two:
+                canon_two = ac2canon[ac_two]
+                out_rows.append([oma_group_two,canon_two,tax_id_two,  "protein_xref_oma",oma_group_two])
 
 
     #GlyGen compiled clusters
@@ -2395,6 +2700,8 @@ def extract_homolog_clusters_ds():
     seen = {}
     cls_size = {}
     for row in out_rows:
+        if row[1].strip() == "":
+            continue
         row_str = json.dumps(row)
         if row_str not in seen:
             seen[row_str]  = True
@@ -2408,7 +2715,11 @@ def extract_homolog_clusters_ds():
     print "\"%s\"" % ("\",\"".join(row))
     seen = {}
     for row in out_rows:
+        if row[1].strip() == "":
+            continue
         cls = row[0]
+        if cls not in cls_size:
+            continue
         if cls_size[cls] < 2:
             continue
         row_str = json.dumps(row)
@@ -2433,22 +2744,29 @@ def extract_homolog_alignments_ds():
     in_file = path_obj["unreviewed"] + "protein_homolog_clusters.csv"
     libgly.load_sheet(work_book["clusters"], in_file, ",")
 
+    is_current = {}
     canon2cls = {}
     f_list = work_book["clusters"]["fields"]
     for row in work_book["clusters"]["data"]:
         database = row[f_list.index("xref_key")].split("_")[2]
         canon = row[f_list.index("uniprotkb_canonical_ac")]
         cls = row[f_list.index("homolog_cluster_id")]
-        cls = "%s.%s" % (database, cls)
         aln_file = "alignments/homologset/homologset.%s.%s.aln" % (database,cls)
-        if os.path.isfile(aln_file) == True:
-            file_size = int(os.path.getsize(aln_file))
-            if file_size > 0:
-                continue
+        cls = "%s.%s" % (database, cls)
+        #if os.path.isfile(aln_file) == True:
+        #    file_size = int(os.path.getsize(aln_file))
+        #    if file_size > 0:
+        #        continue
         if canon not in canon2cls:
             canon2cls[canon] = []
         canon2cls[canon].append(cls)
-
+        is_current[cls] = True
+    
+    for in_file in glob.glob("alignments/homologset/homologset.*.aln"):
+        cls = in_file.split("/")[-1].replace("homologset.", "").replace(".aln", "")
+        if cls not in is_current:
+            cmd = "rm -f alignments/homologset/homologset.%s.*" % (cls)
+            x = commands.getoutput(cmd)
 
     seq_hash = {}
     for fasta_file in glob.glob(path_obj["unreviewed"] +  "*protein_canon*sequences.fasta"):
@@ -2538,7 +2856,7 @@ def extract_species_customized_neuac_neugc_ds():
 
 
 def extract_rdfdata_ds():
-    src_file = path_obj["downloads"] + "glytoucan/current/export/glycandata.rdf.gz"
+    src_file = path_obj["downloads"] + "glytoucan/current/export/glycandata.rdf.gz.00"
     dst_file = path_obj["unreviewed"] + "glycan_rdfdata.rdf.gz"
     
     cmd = "cp %s %s" % (src_file, dst_file)
@@ -2637,11 +2955,13 @@ def extract_images_ds(ds_name):
     reldir_dict = {
         "images_snfg_extended_png": "glytoucan/current/export/snfg/extended/png/"
         ,"images_snfg_extended_svg": "glytoucan/current/export/snfg/extended/svg/"
+        ,"images_snfg_extended_json": "glytoucan/current/export/snfg/extended/json/"
         ,"images_cfg_extended_png": "glytoucan/current/export/cfg/extended/png/"
         ,"images_cfg_extended_svg": "glytoucan/current/export/cfg/extended/svg/"
     }
     images_dir = path_obj["downloads"] + reldir_dict[ds_name]
-    
+   
+    frmt = ds_name.split("_")[-1] 
 
     #Remove intermediate/glycanimages dir and create it again
     cmd = "rm -rf %s/%s" % (path_obj["intermediate"], ds_name)
@@ -2651,7 +2971,7 @@ def extract_images_ds(ds_name):
     x = commands.getoutput(cmd)
 
     #placeholder image
-    cmd = "cp generated/misc/G00000*.png %s/%s/" % (path_obj["intermediate"], ds_name)
+    cmd = "cp generated/misc/G00000*.%s %s/%s/" % (frmt, path_obj["intermediate"], ds_name)
     x = commands.getoutput(cmd)
                 
 
@@ -2823,7 +3143,8 @@ def extract_pubchem_status_ds():
             status_dict[glytoucan_ac] = {}
         combo = row[f_list.index("xref_key")] + "|"  + row[f_list.index("xref_id")] 
         status_dict[glytoucan_ac][combo] =  True
-    
+   
+    seen_row = {} 
     data_frame = {}
     in_file = path_obj["unreviewed"] + "glycan_masterlist.csv"
     libgly.load_sheet(data_frame, in_file, ",")
@@ -2837,10 +3158,17 @@ def extract_pubchem_status_ds():
                 xref_key_list.append(xref_key)
                 xref_id_list.append(xref_id)
             newrow = [glytoucan_ac, "yes", "|".join(xref_key_list), "|".join(xref_id_list)]
-            print "\"%s\"" % ("\",\"".join(newrow))
+            row_str = json.dumps(newrow)
+            if row_str not in seen_row:
+                seen_row[row_str] = True
+                print "\"%s\"" % ("\",\"".join(newrow))
+            
         else:
             newrow = [glytoucan_ac, "no", "", ""]
-            print "\"%s\"" % ("\",\"".join(newrow))
+            row_str = json.dumps(newrow)
+            if row_str not in seen_row:
+                seen_row[row_str] = True
+                print "\"%s\"" % ("\",\"".join(newrow))
             
 
     return
@@ -2867,13 +3195,16 @@ def extract_pathway_reactome_ds():
         if glytoucan_ac not in cid2gtc[c_id]:
             cid2gtc[c_id].append(glytoucan_ac)
 
+    seen_row = {}
     data_frame = {}
-    in_file = path_obj["downloads"] + "reactome/current/ChEBI2Reactome_PE_Pathway.csv"
-    libgly.load_sheet(data_frame, in_file, ",")
-    f_list = data_frame["fields"]
+    in_file = path_obj["downloads"] + "reactome/current/ChEBI2Reactome_PE_Pathway.txt"
+    libgly.load_sheet(data_frame, in_file, "\t")
+    f_list = ["chebi_id","reactome_compound_id","compound_name","reactome_pathway_id",
+            "reactome_pathway_url","pathway_name","c7","species_scientific_name"]
+    first_row = data_frame["fields"]
     k_list = ["chebi_id","reactome_compound_id", "compound_name", 
             "reactome_pathway_id","pathway_name", "species_scientific_name"]
-    for row in data_frame["data"]:
+    for row in [first_row] + data_frame["data"]:
         val_dict = {}
         for k in k_list:
             val_dict[k] = row[f_list.index(k)]
@@ -2886,12 +3217,351 @@ def extract_pathway_reactome_ds():
             for k in k_list[2:]:
                 newrow.append(val_dict[k])
             newrow += [xref_key, xref_id]
-            print "\"%s\"" % ("\",\"".join(newrow))
+            row_str = json.dumps(newrow)
+            if row_str not in seen_row:
+                seen_row[row_str] = True
+                print "\"%s\"" % ("\",\"".join(newrow))
     return
 
 
+def load_disease_info ():
+
+    dict_one, dict_two = {}, {}
+    in_file = "generated/misc/doid2uberonid_mapping.csv"
+
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, ",")
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        dict_one[row[f_list.index("do_id")]] = row[f_list.index("do_name")]
+        dict_two[row[f_list.index("uberon_id")]] = row[f_list.index("uberon_name")]
+
+    return dict_one, dict_two
 
 
+def extract_toolsupport_ds():
+
+    tool2file = {
+        "sandbox":path_obj["downloads"] + "sandbox/current/accessionlist.csv",
+        "pdb":"downloads/glycam_3d/glycan/current/", 
+        "gnome":"",
+        "gnome_glygen":"downloads/gnome/current/GlyGen.valid-accessions.txt", 
+        "gnome_glygen_nglycans":"downloads/gnome/current/GlyGen_NGlycans.valid-accessions.txt",
+        "gnome_glygen_oglycans":"downloads/gnome/current/GlyGen_OGlycans.valid-accessions.txt", 
+        "gnome_glycotree_nglycans":"downloads/gnome/current/GlycoTree_NGlycans.valid-accessions.txt", 
+        "gnome_glycotree_oglycans":"downloads/gnome/current/GlycoTree_OGlycans.valid-accessions.txt"
+    }
+
+    support_dict = {}
+    for tool in tool2file:
+        support_dict[tool] = {}
+        if tool.find("gnome_") != -1:
+            in_file = tool2file[tool]
+            cmd = "readlink -f " + in_file
+            x = commands.getoutput(cmd)
+            libgly.log_file_usage(x, "", "append")
+            with open(in_file, "r") as FR:
+                for line in FR:
+                    glytoucan_ac = line.strip()
+                    support_dict[tool][glytoucan_ac] = True
+                
+    tool = "sandbox"
+    in_file = tool2file[tool]
+    cmd = "readlink -f " + in_file
+    x = commands.getoutput(cmd)
+    libgly.log_file_usage(x, "", "append")
+
+    data_frame = {} 
+    libgly.load_sheet(data_frame, in_file, ",")
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        glytoucan_ac = row[f_list.index("glytoucan_ac")]
+        support_dict[tool][glytoucan_ac] = True           
+
+    tool = "pdb"
+    in_dir = tool2file[tool]
+    cmd = "readlink -f " + in_dir
+    x = commands.getoutput(cmd)
+    libgly.log_file_usage(x, "", "append")
+
+    for pdb_file in glob.glob(in_dir + "*.pdb"):
+        glytoucan_ac = pdb_file.split("/")[-1].split(".")[0]
+        support_dict[tool][glytoucan_ac] = True
+
+
+
+
+
+    newrow = ["glytoucan_ac", "tool", "support"]
+    print "\"%s\"" % ("\",\"".join(newrow))
+
+    data_frame = {}
+    in_file = path_obj["unreviewed"] +  "glycan_masterlist.csv"
+    cmd = "readlink -f " + in_file
+    x = commands.getoutput(cmd)
+    libgly.log_file_usage(x, "", "append")
+
+    seen = {} 
+    libgly.load_sheet(data_frame, in_file, ",")
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        glytoucan_ac = row[f_list.index("glytoucan_ac")]
+        glycan_mass = row[f_list.index("glycan_mass")]
+        if glycan_mass.strip() != "":
+            support_dict["gnome"][glytoucan_ac] = True
+        for tool in tool2file:
+            support = "yes" if glytoucan_ac in support_dict[tool] else "no"
+            newrow = [glytoucan_ac, tool, support]
+            row_str = json.dumps(newrow)
+            if row_str not in seen:
+                print "\"%s\"" % ("\",\"".join(newrow))
+                seen[row_str] = True
+    return
+
+
+def load_tissueid2name_map():
+
+    in_file = "generated/misc/sample_mapping.csv"
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, ",")
+    f_list = data_frame["fields"]
+    tmp_dict = {}
+    for row in data_frame["data"]:
+        if row == []:
+            continue
+        term_id,term_name = row[f_list.index("term_id")],  row[f_list.index("term_name")]
+        sample_type = row[f_list.index("sample_type")]
+        tmp_dict[term_id] = term_name
+
+    return tmp_dict
+
+
+def load_doid2name():
+
+    tmp_dict = {}
+    in_file = path_obj["unreviewed"] + "/protein_disease_names.csv"
+    data_frame = {}
+    libgly.load_sheet(data_frame,in_file, ",")
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        xref_key = row[f_list.index("xref_key")]
+        xref_id = row[f_list.index("xref_id")]
+        name = row[f_list.index("name")]
+        description = row[f_list.index("description")]
+        if xref_key not in tmp_dict:
+            tmp_dict[xref_key] = {}
+        if xref_id not in tmp_dict[xref_key]:
+            tmp_dict[xref_key][xref_id] = {"name":"", "description":"", "synonyms":[]}
+        if row[f_list.index("name_type")] == "recommended_name":
+            tmp_dict[xref_key][xref_id]["name"] = name
+            tmp_dict[xref_key][xref_id]["description"] = description
+        if row[f_list.index("name_type")] == "synonym" and name not in tmp_dict[xref_key][xref_id]["synonyms"]:
+            tmp_dict[xref_key][xref_id]["synonyms"].append(name)
+
+
+    return tmp_dict
+
+
+
+def extract_biomarkers_ds():
+
+    glycan_list = load_glycan_masterlist()
+    tissueid2name = load_tissueid2name_map()
+
+    doid2name = load_doid2name()
+
+    ac2synonyms = {}
+    file_list = ["unreviewed/glycan_names.csv"]
+    for in_file in file_list:
+        data_frame = {}
+        libgly.load_sheet(data_frame, in_file, ",")
+        f_list = data_frame["fields"]
+        for row in data_frame["data"]:
+            ac = row[f_list.index("glytoucan_ac")]
+            name = row[f_list.index("glycan_name")]
+            domain = row[f_list.index("glycan_name_domain")]
+            if domain == "Semantic Name":
+                if ac not in ac2synonyms:
+                    ac2synonyms[ac] = []
+                if name not in ac2synonyms[ac]:
+                    ac2synonyms[ac].append(name)
+
+
+
+
+    f_list_one = ["biomarker_id", "biomarker", "assessed_biomarker_entity", 
+        "assessed_biomarker_entity_id", "assessed_entity_type", "exposure_agent", "exposure_agent_id",
+        "best_biomarker_role", "loinc_code", "evidence", "condition"]
+    newrow = ["glytoucan_ac", "biomarker_canonical_id"]
+    newrow += f_list_one
+    newrow += ["component_level_tags", "top_level_tags",  "evidence_type", "component_synonyms"]
+    newrow += ["uberon_id","anatomical_entity", "do_id","do_name", "do_desc", "do_syn"]
+    newrow += ["xref_key","xref_id","src_xref_key", "src_xref_id"]
+    print "\"%s\"" % ("\",\"".join(newrow))
+
+
+
+
+    log_file = path_obj["logs"] +  "/glycan_biomarkers.log"
+    FL = open(log_file, "w")
+
+
+    in_file = path_obj["downloads"] + "/biomarkerdb/current/oncomx.tsv"
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, "\t")
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        flag_list = []
+        biomarker_id = row[f_list.index("biomarker_id")]
+        biomarker_canonical_id = row[f_list.index("biomarker_id")].split("-")[0]
+        entity_id = row[f_list.index("assessed_biomarker_entity_id")]
+        evidence = row[f_list.index("evidence")]
+        tag = row[f_list.index("tag")]
+        evidence_source = row[f_list.index("evidence_source")]
+        do_id = row[f_list.index("condition_id")].lower().replace("doid:", "")
+        uberon_id = row[f_list.index("specimen_id")].lower().replace("uberon:", "")
+        if entity_id.find("GTC:") == -1:
+            flag_list.append("no-GTC-component")
+        ac = entity_id.split(":")[1]
+        if ac not in glycan_list:
+            flag_list.append("not-in-glycan-masterlist")
+        k =  evidence_source.split(":")[0].lower()
+        if k not in ["pubmed", "doi"]:
+            flag_list.append("no-pubmed/doi-xref")
+
+        if flag_list != []:
+            FL.write("\"%s\"\n" % ("\",\"".join(row + [";".join(flag_list)])) )
+            continue
+
+        synonyms = ac2synonyms[ac] if ac in ac2synonyms else []
+        component_synonyms = "|".join(synonyms)
+        xref_key = "glycan_xref_" + k
+        xref_id = evidence_source.split(":")[1]
+        tmp_row = [ac, biomarker_canonical_id]
+        tag_list_one, tag_list_two = [], []
+        for f in f_list_one:
+            val = "" if f == "loinc_code" and val == "NA" else row[f_list.index(f)]
+            tmp_row.append(val)
+        for t in tag.split(";"):
+            if t in ["condition","best_biomarker_role"]:
+                tag_list_two.append(t)
+            else:
+                tag_list_one.append(t)
+        n_one = len(tag_list_one)
+        n_two = len(tag_list_two)
+        evidence_type = ""
+        if n_one > 0 and n_two > 0:
+            evidence_type = "both_levels"
+        elif n_one > 0:
+            evidence_type = "component_level"
+        elif n_two > 0:
+            evidence_type = "top_level"
+        tmp_row.append("; ".join(tag_list_one))
+        tmp_row.append("; ".join(tag_list_two))
+        tmp_row.append(evidence_type)
+        tmp_row.append(component_synonyms)
+
+        uberon_name, do_name  = "", ""
+        if do_id in doid2name:
+            do_name = doid2name[do_id]
+
+
+
+        do_desc = doid2name["do"][do_id]["description"] if do_id in doid2name["do"] else ""
+        do_syn_list = doid2name["do"][do_id]["synonyms"] if do_id in doid2name["do"] else []
+        do_syn = "|".join(do_syn_list)
+        u_id = "UBERON:" + uberon_id
+        if u_id in tissueid2name:
+            uberon_name = tissueid2name[u_id]
+
+
+        tmp_row += [uberon_id,uberon_name,do_id,do_name, do_desc, do_syn]
+        #src_xref_key = "glycan_xref_glygen_ds"
+        #ds = "glycan_biomarkers"
+        #src_xref_id = ds2bco[ds] if ds in ds2bco else ""
+        src_xref_key = "glycan_xref_biomarkerkb"
+        src_xref_id = biomarker_id
+        newrow = tmp_row + [xref_key, xref_id, src_xref_key, src_xref_id]
+        if xref_id != "https":
+            print "\"%s\"" % ("\",\"".join(newrow))
+
+
+    FL.close()
+ 
+    return
+
+
+def extract_europepmc_linkouts_ds (dataset):
+
+    obj_list = []
+    file_list = glob.glob("unreviewed/*_citations_*.csv")
+    i = 0
+    batch_size = 30000
+    grp_dict = {}
+    for in_file in file_list:
+        data_frame = {}
+        libgly.load_sheet(data_frame, in_file, ",")
+        f_list = data_frame["fields"]
+        for row in data_frame["data"]:
+            record_id = row[f_list.index("uniprotkb_canonical_ac")].split("-")[0] if "uniprotkb_canonical_ac" in f_list else ""
+            record_id = row[f_list.index("glytoucan_ac")] if "glytoucan_ac" in f_list else record_id
+            xref_key = row[f_list.index("xref_key")]
+            xref_id = row[f_list.index("xref_id")]
+            record_type = "glycan" if in_file.find("glycan_") != -1 else "protein"
+            article_src = "DOI" if xref_key.find("doi") != -1 else "MED"
+            article_url = "https://www.glygen.org/publication/%s/%s" % (article_src, xref_id)
+            if record_id != "":
+                grp = int(i/batch_size) + 1
+                if grp not in grp_dict:
+                    grp_dict[grp] = []
+                obj = {"recordid":record_id,"articlesrc":article_src, "articleid":xref_id, 
+                        "recordtype":record_type, "articleurl":article_url}
+                grp_dict[grp].append(obj)
+                i += 1
+
+    cmd = "rm -f intermediate/all_europepmc_linkouts*.xml"
+    x = commands.getoutput(cmd)
+
+    super_grp_name_list = ["one", "two", "three", "four"]
+    for grp in grp_dict:
+        super_grp_idx = int(grp/32)
+        super_grp_name = super_grp_name_list[super_grp_idx]
+        super_grp_name_list.append(super_grp_name)
+        xml_buffer = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+        xml_buffer += "<links>\n"
+        for obj in grp_dict[grp]:
+            ttl = "Glycan - %s" % (obj["recordid"]) if obj["recordtype"] == "glycan" else "Protein - %s" % (obj["recordid"])
+            xml_buffer += "   <link providerId=\"2167\">\n"
+            xml_buffer += "      <resource>\n"
+            xml_buffer += "         <title>%s</title>\n" % (ttl) 
+            xml_buffer += "         <url>%s</url>\n" % (obj["articleurl"])
+            if obj["recordtype"] == "glycan":
+                xml_buffer += "      <image>https://api.glygen.org/glycan/image/%s</image>\n" % (obj["recordid"])    
+            xml_buffer += "      </resource>\n"  
+            if obj["articlesrc"] != "DOI":
+                xml_buffer += "      <record>\n"
+                xml_buffer += "         <source>%s</source>\n" % (obj["articlesrc"])
+                xml_buffer += "         <id>%s</id>\n" % (obj["articleid"])
+                xml_buffer += "      </record>\n"
+            else:
+                xml_buffer += "      <doi>%s</doi>\n" % (obj["articleid"])
+            xml_buffer += "   </link>\n"
+        xml_buffer += "</links>\n"
+        out_file = "intermediate/all_europepmc_linkouts_%s.%s.xml" % (super_grp_name, grp)
+        with open(out_file, "w") as FW:
+            FW.write("%s\n" % (xml_buffer))
+       
+
+    os.chdir("/data/projects/glygen/generated/datasets/intermediate/")
+    for super_grp_name in super_grp_name_list:
+        if dataset == "europepmc_linkouts_" + super_grp_name:
+            cmd = "zip all_europepmc_linkouts_%s.zip all_europepmc_linkouts_%s.*.xml" % (super_grp_name, super_grp_name)
+            x = commands.getoutput(cmd)
+            cmd = "mv /data/projects/glygen/generated/datasets/intermediate/all_europepmc_linkouts_%s.zip " % (super_grp_name)
+            cmd += "/data/projects/glygen/generated/datasets/unreviewed/"
+            x = commands.getoutput(cmd)
+
+    return
 
 
 
@@ -2919,11 +3589,14 @@ def main():
     global prefixes
     global data_grid
     global species_obj
+    global ds2bco
+
 
 
     dataset = options.dataset
 
     config_obj = json.loads(open("conf/config.json", "r").read())
+    ds2bco = json.loads(open("generated/misc/ds2bco.json", "r").read())
     species_obj = {}
     in_file = config_obj["pathinfo"]["misc"]+ "/species_info.csv"
     libgly.load_species_info(species_obj, in_file)
@@ -2956,8 +3629,12 @@ def main():
         extract_citations_glytoucan_ds()
     elif dataset == "citations_ncfg":
         extract_citations_ncfg_ds()
-    elif dataset == "citations_glycomotif":
-        extract_citations_glycomotif_ds()
+    elif dataset == "citations_motif":
+        extract_citations_motif_ds()
+    elif dataset == "citations_biomarkers":
+        extract_citations_biomarkers_ds()
+    elif dataset == "citations_species":
+        extract_citations_species_ds()
     elif dataset == "classification":
         extract_classification_ds()
     elif dataset == "motif":
@@ -2967,7 +3644,7 @@ def main():
     elif dataset == "monosaccharide_composition_advanced":
         extract_monosaccharide_composition_advanced_ds()
     elif dataset in ["sequences_iupac_extended", "sequences_glycoct", "sequences_wurcs", 
-            "sequences_glycam_iupac", "sequences_byonic", "sequences_gwb"]:
+            "sequences_glycam_iupac", "sequences_byonic", "sequences_gwb", "sequences_glycoctxml"]:
         extract_sequences_ds("_".join(dataset.split("_")[1:]) )
     elif dataset == "sequences_smiles_isomeric":
         extract_sequences_smiles_isomeric_ds()
@@ -2979,12 +3656,12 @@ def main():
         extract_xrefs_ds(dataset)
     elif dataset == "pubchem_status":
         extract_pubchem_status_ds()
-    elif dataset in ["images_snfg_extended_png", "images_snfg_extended_svg"]:
+    elif dataset in ["images_snfg_extended_png", "images_snfg_extended_svg", "images_snfg_extended_json"]:
         extract_images_ds(dataset)
     elif dataset == "image_details":
         extract_image_details_ds()
-    elif dataset == "evidence_ncfg":
-        extract_evidence_ncfg_ds()
+    elif dataset == "ncfg":
+        extract_ncfg_ds()
     elif dataset in  ["customized_neuac_mammalian_species_annotation", "synthesized"]:
         extract_compiled_ds(dataset, True)
     elif dataset == "subsumption":
@@ -3007,12 +3684,20 @@ def main():
         extract_top_authors_ds()
     elif dataset == "dictionary":
         extract_dictionary_ds()
-
+    elif dataset == "biomarkers":
+        extract_biomarkers_ds()
+    elif dataset == "toolsupport":
+        extract_toolsupport_ds()
+    elif dataset == "glygen_mw_xref_mapping":
+        extract_glygen_mw_xref_mapping_ds()
 
 
 
     #protein datasets
-    if dataset == "homolog_clusters":
+    if dataset == "reaction2ec_rhea":
+        mol = "protein"
+        extract_reaction2ec_rhea_ds()
+    elif dataset == "homolog_clusters":
         mol = "protein"
         extract_homolog_clusters_ds()
     elif dataset == "homolog_alignments":
@@ -3024,6 +3709,9 @@ def main():
     elif dataset == "disease_names":
         mol = "protein"
         extract_disease_names_ds()
+    elif dataset == "disease_tree":
+        mol = "protein"
+        extract_disease_tree_ds()
     elif dataset == "ncbi_gene_linkouts":
         mol = "protein"
         extract_ncbi_gene_linkouts_ds()
@@ -3038,7 +3726,7 @@ def main():
         extract_ncbi_pubmed_linkouts_three_ds()
     elif dataset in ["glygen_pharos_xref_mapping", "glygen_pubchem_xref_mapping",
             "glygen_uniprotkb_xref_mapping", "glygen_genecards_xref_mapping", 
-            "glygen_iptmnet_xref_mapping"]:
+            "glygen_iptmnet_xref_mapping", "glygen_mgi_xref_mapping"]:
         mol = "protein"
         extract_xref_mapping_ds(dataset)
     elif dataset == "glygen_uniprotkb_protvista_mapping":
@@ -3048,8 +3736,15 @@ def main():
         mol = "protein"
         extract_uniprotkb_accession_history_ds()
 
+    if dataset == "cfde_data_package": 
+        mol = "all"
+        extract_cfde_data_package_ds()
+    elif dataset in ["europepmc_linkouts_one", "europepmc_linkouts_two"]:
+        mol = "all"
+        extract_europepmc_linkouts_ds(dataset)
+    elif dataset == "glygen_flybase_linkout":
+        extract_glygen_flybase_linkout_ds() 
 
-    pid = os.getpid()
     pid = os.getpid()
     src_file = "usage/file_usage.%s.log" % (pid)
     dst_file = "usage/%s_%s.fu.log" % (mol, dataset)

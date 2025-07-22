@@ -3,9 +3,8 @@ import string
 from optparse import OptionParser
 import glob
 import json
-import pymongo
-from pymongo import MongoClient
-
+import csvutil
+import libgly
 
 __version__="1.0"
 __status__ = "Dev"
@@ -73,11 +72,11 @@ def get_kw_index_list(kw_list, type_list, type2kw):
             if idx not in idx_list:
                 idx_list.append(idx)
     
-    print ("kw_list:", kw_list)
-    print ("stat_fields:", type_list)
-    print ("type2kw:", type2kw)
-    print ("idx_list:", idx_list)
-    print ("\n\n")
+    #print ("kw_list:", kw_list)
+    #print ("stat_fields:", type_list)
+    #print ("type2kw:", type2kw)
+    #print ("idx_list:", idx_list)
+    #print ("\n\n")
 
     return idx_list
 
@@ -85,15 +84,16 @@ def get_kw_index_list(kw_list, type_list, type2kw):
 def load_species_dict(in_file):
 
     species2taxid = {}
-    lines = open(in_file, "r").read().split("\n")[1:]
-    for line in lines:
-        if line.strip() == "":
+    
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, ",")
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        ref_status = row[f_list.index("is_reference")]
+        if ref_status != "yes":
             continue
-        row = line[1:-1].split("\",\"")
-        if row[-2] != "yes":
-            continue
-        tax_id = int(row[0])
-        tax_name = row[2]
+        tax_id = int(row[f_list.index("tax_id")])
+        tax_name = row[f_list.index("glygen_name")]
         if tax_name not in species2taxid:
             species2taxid[tax_name] = tax_id
 
@@ -108,8 +108,10 @@ def get_old_stat_obj():
     for species in species2taxid:
         tax_id = str(species2taxid[species])
         taxid2species[tax_id] = species
-
-
+    species_map = json.loads(open("generated/misc/species_map.json", "r").read())
+    tax_id_map = {}
+    for tax_id in species_map:
+        tax_id_map[tax_id] = species_map[tax_id]["ref_tax_id"]
 
 
     for in_file in glycan_file_list:
@@ -118,6 +120,7 @@ def get_old_stat_obj():
         for obj in doc["species"]:
             tax_id = obj["taxid"]
             tax_id_str = str(tax_id)
+            tax_id_str = tax_id_map[tax_id_str] if tax_id_str in tax_id_map else tax_id_str
             if tax_id_str not in taxid2species:
                 continue
             tax_name = taxid2species[tax_id_str]
@@ -138,6 +141,7 @@ def get_old_stat_obj():
         for obj in doc["species"]:
             tax_id = obj["taxid"]
             tax_id_str = str(tax_id)
+            tax_id_str = tax_id_map[tax_id_str] if tax_id_str in tax_id_map else tax_id_str
             if tax_id_str not in taxid2species:
                 continue
             tax_name = taxid2species[tax_id_str]
@@ -149,10 +153,11 @@ def get_old_stat_obj():
                     "seen_glycoprotein":{}
                 }
             stat_obj[tax_id_str]["seen_protein"][canon] = True
-            for o in doc["glycosylation"]:
-                glytoucan_ac = o["glytoucan_ac"]
-                if glytoucan_ac != "":
-                    stat_obj[tax_id_str]["seen_glycan"][glytoucan_ac] = True
+            #Glycan stats should come from glycan files only
+            #for o in doc["glycosylation"]:
+            #    glytoucan_ac = o["glytoucan_ac"]
+            #    if glytoucan_ac != "":
+            #        stat_obj[tax_id_str]["seen_glycan"][glytoucan_ac] = True
             if doc["glycosylation"] != []:
                 stat_obj[tax_id_str]["seen_glycoprotein"][canon] = True
 
@@ -346,12 +351,12 @@ def main():
     global protein_file_list
 
     
-    generated_dir = "/data/projects/glygen/generated/"
-    wrk_dir = "/home/rykahsay/glygen-backend-integration/object-maker"
+    generated_dir = "generated/"
+    wrk_dir = "/data/shared/repos/glygen-backend-integration/object-maker/"
     jsondb_dir = wrk_dir + "/jsondb/"
 
 
-    species_file = generated_dir + "/misc/species_info.csv"
+    species_file = "generated/misc/species_info.csv"
     species2taxid = load_species_dict(species_file)
 
 
@@ -360,15 +365,20 @@ def main():
 
     #glycan_file_list = glob.glob(jsondb_dir + "/glycandb/G17*.json")
     #protein_file_list = glob.glob(jsondb_dir + "/proteindb/P1421*.json")
-
+    
     old_stat_obj = get_old_stat_obj()
-    new_stat_obj = get_new_stat_obj()
-    doc = { "oldstat":old_stat_obj, "newstat":new_stat_obj}
-   
+    #new_stat_obj = get_new_stat_obj()
+    #doc = { "oldstat":old_stat_obj, "newstat":new_stat_obj}
+    doc = { "oldstat":old_stat_obj}
 
     out_file = jsondb_dir + "/statdb/stat.json"
     with open(out_file, "w") as FW:
         FW.write("%s\n" % (json.dumps(doc, indent=4)))
+
+
+    log_file = "logs/make-statdb.log"
+    msg = "make-statdb: final created: 1 objects"
+    csvutil.write_log_msg(log_file, msg, "w")
 
 
             

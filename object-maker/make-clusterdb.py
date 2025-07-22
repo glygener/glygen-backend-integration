@@ -13,7 +13,7 @@ import pytz
 import subprocess
 
 import libgly
-
+import csvutil
 
 
 
@@ -79,11 +79,13 @@ def load_msa(aln_file):
 #######################################
 def main():
 
+
+
     config_obj = json.loads(open("../conf/config.json", "r").read())
     path_obj  =  config_obj[config_obj["server"]]["pathinfo"]
 
     species_obj = {}
-    in_file = path_obj["misc"]+ "/species_info.csv"
+    in_file = "generated/misc/species_info.csv"
     libgly.load_species_info(species_obj, in_file)
 
     species_list = []
@@ -109,13 +111,18 @@ def main():
     is_canon = {}
     seqac2id = {}
 
+    log_file = "logs/make-clusterdb.log"
+    msg = "make-clusterdb: started logging"
+    csvutil.write_log_msg(log_file, msg, "w")
+
     sheet_list = ["masterlist", "recnames", "submittednames","info_uniprotkb"]
     for sheet_name in sheet_list:
         for species in species_list:
             in_file = data_dir + "/%s_protein_%s.csv" % (species, sheet_name)
             if os.path.isfile(in_file) == False:
                 continue
-            print ("make-clusterdb:", in_file)
+            msg = "make-clusterdb: processing %s" % (in_file)
+            csvutil.write_log_msg(log_file, msg, "a")
 
             sheet_obj = {}
             sheet_obj["fields"] = []
@@ -124,12 +131,12 @@ def main():
                 for canon in sheet_obj["data"]:
                     is_canon[canon] = True
                     isoform2taxid[canon] = species_obj[species]["tax_id"]
-                    isoform2taxname[canon] = species_obj[species]["long_name"]
+                    isoform2taxname[canon] = species_obj[species]["common_name"]
                     for row in sheet_obj["data"][canon]:
                         for isoform in [row[-2], row[-1]]:
                             isoform2canon[isoform] = canon
                             isoform2taxid[isoform] = species_obj[species]["tax_id"]
-                            isoform2taxname[isoform] = species_obj[species]["long_name"]
+                            isoform2taxname[isoform] = species_obj[species]["common_name"]
             elif sheet_name == "recnames":
                 for canon in sheet_obj["data"]:
                     for row in sheet_obj["data"][canon]:
@@ -151,9 +158,9 @@ def main():
     libgly.load_sheet_as_dict(homolog_clusters_df, in_file, ",", "uniprotkb_canonical_ac")            
 
     members_dict = {}
-
     aln_file_list = glob.glob("alignments/homologset/*.aln")
     aln_file_list += glob.glob("alignments/isoformset/*/*.aln")
+ 
     cls_count = 0
     clsid2species = {}
     for aln_file in aln_file_list:
@@ -165,12 +172,15 @@ def main():
             if canon not in is_canon:
                 cmd = "rm -f alignments/isoformset/%s/isoformset.uniprotkb.%s.*" % (species,canon)
                 x = subprocess.getoutput(cmd)
-                print ("REMOVED OLD FILES: alignments/isoformset/%s/isoformset.uniprotkb.%s.*" % (species,canon))
+                msg = "REMOVED OLD FILES: alignments/isoformset/%s/isoformset.uniprotkb.%s.*" % (species,canon)
+                csvutil.write_log_msg(log_file, msg, "a")
                 continue
-
         aln_hash = load_msa(aln_file)
         if cls_id not in members_dict:
             members_dict[cls_id] = []
+            if cls_count > 0 and cls_count%1000 == 0:
+                msg = "make-clusterdb: processed %s clusters" % (cls_count)
+                csvutil.write_log_msg(log_file, msg, "a")
             cls_count += 1
         for seq_ac in aln_hash.keys():
             if seq_ac != "consensus":
@@ -197,12 +207,14 @@ def main():
         obj = {"uniprot_canonical_ac":canon, "clusterlist":canon2cls[canon]}
         obj = order_obj(obj)
         #fout_obj[canon] = order_obj(obj)
-        out_file = path_obj["jsondbpath"] + "clusterdb/%s.json" % (canon)
+        out_file = "jsondb/clusterdb/%s.json" % (canon)
         with open(out_file, "w") as FW:
             FW.write("%s\n" % (json.dumps(obj, indent=4)))
         record_count += 1
 
-    print ("make-clusterdb: ... final created in: %s objects" % (record_count))
+
+    msg = "make-clusterdb: ... final created in: %s objects" % (record_count)
+    csvutil.write_log_msg(log_file, msg, "a")
 
 
 

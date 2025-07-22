@@ -49,7 +49,7 @@ def main():
 
 
     generated_dir = "/data/projects/glygen/generated/"
-    wrk_dir = "/home/rykahsay/glygen-backend-integration/object-maker"
+    wrk_dir = "/data/shared/repos/glygen-backend-integration/object-maker/"
     reviewed_dir = wrk_dir + "/reviewed/"
     unreviewed_dir = wrk_dir + "/unreviewed/"
 

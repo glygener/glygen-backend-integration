@@ -31,7 +31,7 @@ def get_counter(counter, prefix):
 def print_triple(triple, seen):
 
     if triple not in seen["trpl"]:
-        print  triple
+        print  (triple)
         seen["trpl"][triple] = True
 
 
@@ -57,8 +57,11 @@ def main():
         
         ver_dir = "/data/shared/glygen/releases/data/v-%s/" % (options.ver)
 
+        file_list = glob.glob(ver_dir + "/jsondb/glycandb/*.json")
+        #file_list = glob.glob(ver_dir + "/jsondb/glycandb/G17689DH*.json")
+
         glycan_obj_list = {}
-        for in_file in glob.glob(ver_dir + "/jsondb/glycandb/*.json"):
+        for in_file in file_list:
             glytoucan_ac = in_file.split("/")[-1].split(".")[0]
             obj = json.loads(open(in_file, "r").read())
             glycan_obj_list[glytoucan_ac] = obj
@@ -231,7 +234,7 @@ def main():
                     triple = "<%s> <%s%s> %s ." % (db_url, ns_map["rdfs"], "recordurl", url_lit)
                     print_triple(triple, seen)
                     
-                    urltmpl_lit = "\"%s\"" % ("http://xxx.yy.zzz")
+                    urltmpl_lit = "\"%s\"" % (o["url"].replace(o["id"], "%s"))
                     triple = "<%s> <%s%s> <%s> ." % (db_url, ns_map["glycan"], "has_url_template", urltmpl_lit)
                     print_triple(triple, seen)
 

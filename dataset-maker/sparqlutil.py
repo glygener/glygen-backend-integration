@@ -54,10 +54,12 @@ def load_do_mapping(data_grid):
         {"prefix":"MESH:", "mapname":"doid2mesh"},
         {"prefix":"UMLS_CUI:", "mapname":"doid2umls"}
     ]
+    #xobj_list_two = [
+    #    {"prefix":"OMIM:", "mapname":"mimid2doid"},
+    #]
     xobj_list_two = [
-        {"prefix":"OMIM:", "mapname":"mimid2doid"},
-    ]
-    
+        {"prefix":"MIM:", "mapname":"mimid2doid"},
+    ] 
 
     limit = 100000
     total = 0
@@ -92,6 +94,7 @@ def load_do_mapping(data_grid):
                     if do_id not in data_grid[o["mapname"]]:
                         data_grid[o["mapname"]][xref_id] = []
                     data_grid[o["mapname"]][xref_id].append(do_id)
+
             if do_id not in data_grid["doid2name"]:
                 data_grid["doid2name"][do_id] = []
             data_grid["doid2name"][do_id].append(do_name)
@@ -415,6 +418,9 @@ def load_citelist(data_grid, species):
                     data_grid["citelist"][ac] = []
 
                 auth_list = pmid2authlist[pm_id] if pm_id in pmid2authlist else []
+                cite_info = libgly.get_citation(pm_id)
+                if cite_info["row"] != []:
+                    auth_list = [cite_info["row"][3]]
                 o = {"pmid":pm_id, "journalname":journal_name, "journaltitle":journal_title, 
                         "pubdate":pub_date, "authorlist":auth_list}
                 data_grid["citelist"][ac].append(o)
@@ -758,14 +764,13 @@ def load_isoformlist(data_grid, species):
 
 
 
-def load_locusinfo(data_grid, species):
+def load_transcript_locusinfo(data_grid, species):
 
     log_nt_file_used(species)
-
     graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
     qs = prefixes
-    qs += " SELECT"
-    qs += "?isoformuri ?trsid ?pepid ?chrid ?startpos ?endpos ?strand "
+    qs += " SELECT "
+    qs += " ?isoformuri ?trsid ?pepid ?chrid ?startpos ?endpos ?strand "
     qs += " FROM <%s>" % (graph_uri)
     qs += " WHERE {"
     qs += "?isoformuri gly:ensTranscript ?trsid . "
@@ -804,6 +809,54 @@ def load_locusinfo(data_grid, species):
 
     return
 
+
+def load_gene_locusinfo(data_grid, species):
+
+
+    log_nt_file_used(species)
+    graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
+    qs = prefixes
+    qs += " SELECT "
+    qs += " ?genename ?ensgid ?chrid ?startpos ?endpos ?strand  "
+    qs += " FROM <%s>" % (graph_uri)
+    qs += " WHERE {"
+    qs += " ?geneuri rdf:type up:Gene ."
+    qs += " ?geneuri skos:prefLabel ?genename ."
+    qs += " ?geneuri gly:hasLocus ?ensgid ."    
+    qs += " ?ensgid rdf:type gly:Gene_Locus ."
+    qs += " ?ensgid gly:chromosome ?chrid ."
+    qs += " ?ensgid gly:reverseStrand ?strand ." 
+    qs += " ?ensgid gly:geneRange ?rangeuri . "
+    qs += " ?rangeuri faldo:begin ?beginuri . "
+    qs += " ?rangeuri faldo:end ?enduri . "
+    qs += " ?beginuri faldo:position ?startpos . "
+    qs += " ?enduri faldo:position ?endpos . "
+    qs += "}"
+
+    
+    limit = 100000
+    total = 0
+    for i in xrange(0, 10000):
+        newqs = qs + " LIMIT %s OFFSET %s " % (limit,  i*limit)
+        sparql.setQuery(newqs)
+        results = sparql.query().convert()
+        n = len(results["results"]["bindings"])
+        if n == 0:
+            break
+        total += n
+        for result in results["results"]["bindings"]:
+            gene_name = result["genename"]["value"]
+            ensg_id = result["ensgid"]["value"]
+            if gene_name not in data_grid["locusinfo"]:
+                data_grid["locusinfo"][gene_name] = {
+                    "chrid":result["chrid"]["value"].strip()
+                    ,"ensgid":result["ensgid"]["value"].split("/")[-1]
+                    ,"startpos":result["startpos"]["value"]
+                    ,"endpos":result["endpos"]["value"]
+                    ,"strand":result["strand"]["value"]
+                }
+    
+    return
 
 
 def load_protein_names(data_grid, species, predicate_type):
@@ -936,9 +989,20 @@ def load_glycosylation_sites(data_grid, species):
                 source_two = result["citationuri"]["value"].split("/")[-1]
             gly_type, saccharide = "", ""
             if comment != "":
-                gly_type = comment.strip().split(" ")[0]
-                saccharide = comment.strip().split(" ")[1]
+                comment = comment.replace("(Microbial infection)", "").split(";")[0].strip()
+                comment_parts = comment.split(" ")
+                gly_type = ""
+                saccharide = comment.strip()
+                if comment_parts[0].find("-linked") != -1 :
+                    gly_type = comment_parts[0]
+                    if len(comment_parts) > 1:
+                        saccharide = comment_parts[1]
+                elif comment[0:2] == "N-":
+                    gly_type = "N-linked"
+                    saccharide = comment
                 saccharide = saccharide.replace("(", "").replace(")", "")
+                #print "Robel|%s|%s|%s" % (comment, gly_type, saccharide)
+
             source_one = source_dict[source_one] if source_one in source_dict else source_one
             for aa in aa_dict:
                 if comment.find(aa.lower()) != -1:
@@ -1693,7 +1757,6 @@ def load_reactions(sheet_obj, species_list):
 
 
 
-
     seen = {}
     for species in species_list:
         graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
@@ -1751,19 +1814,25 @@ def load_reactions(sheet_obj, species_list):
 
 def load_ac2xref(sheet_obj, species, xref_obj):
 
+
+    db_name = xref_obj["dbname"] 
+    #if species == "sarscov2" and db_name == "RefSeq":
+    #    db_name = "AGR"
+
     log_nt_file_used(species)
     graph_uri = "http://sparql.glygen.org#uniprot_%s" % (species)
     qs = prefixes
-    qs += " SELECT"
+    qs += " SELECT "
     qs += " ?ac ?uri ?label" if xref_obj["lblflag"] == True else "?ac ?uri"
     qs += " FROM <%s>" % (graph_uri)
     qs += " WHERE {"
     qs += " ?ac rdfs:seeAlso ?uri ."
-    qs += " ?uri up:database <http://purl.uniprot.org/database/%s> ." % (xref_obj["dbname"])
+    qs += " ?uri up:database <http://purl.uniprot.org/database/%s> ." % (db_name)
     qs += " ?uri rdfs:comment ?label ." if xref_obj["lblflag"] == True else ""
     qs += " ?ac rdf:type up:Protein ."
     qs += "}"
-    
+  
+    #print " ?uri up:database <http://purl.uniprot.org/database/%s> ." % (xref_obj["dbname"])
 
     if xref_obj["dbname"] == "Reactome":
         qs = prefixes
@@ -1791,7 +1860,7 @@ def load_ac2xref(sheet_obj, species, xref_obj):
         qs += " ?uri gly:equation ?label ."
         qs += "}"
 
-
+    
     limit = 100000
     total = 0
     for i in xrange(0, 10000):
@@ -1809,7 +1878,6 @@ def load_ac2xref(sheet_obj, species, xref_obj):
             if ac not in sheet_obj:
                 sheet_obj[ac] = []
             sheet_obj[ac].append({"id":db_id, "label":label})
-
     return
 
 

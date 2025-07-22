@@ -45,7 +45,7 @@ def main():
                         	FW.close()
 				out_file = prefix + "." + str(j) + ".nt"
                 		FW = open(out_file, "w")
-				print "parsed %s statements" % (i)
+				#print "parsed %s statements" % (i)
 			i += 1
 		FW.close()
 

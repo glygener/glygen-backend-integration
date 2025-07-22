@@ -1,0 +1,60 @@
+import os
+import csv
+import sys
+import json
+import glob
+import gzip
+import xml.etree.ElementTree as ET
+from Bio import SeqIO
+import time
+import requests
+
+
+import libgly3
+
+
+
+
+
+def main():
+
+
+    config_obj = json.loads(open("conf/config.json", "r").read())
+ 
+    global path_obj
+    global downloaded_list
+
+    path_obj = config_obj["pathinfo"]
+
+
+
+    FW = open("logs/medline-glygen-list.txt", "w")
+    seen = {}
+    file_list = glob.glob("unreviewed/*_citations_*.csv")
+
+    for in_file in file_list:
+        data_frame = {}
+        libgly3.load_sheet(data_frame, in_file, ",")
+        f_list = data_frame["fields"]
+        if "xref_key" not in f_list:
+            continue
+        for row in data_frame["data"]:
+            xref_key, xref_id = row[f_list.index("xref_key")], row[f_list.index("xref_id")]
+            if xref_key.find("pubmed") == -1:
+                continue
+            if xref_id == "" or xref_id.isdigit() == False:
+                continue
+            if xref_id not in seen:        
+                FW.write("%s\n" % (xref_id))
+                seen[xref_id] = True
+    FW.close()  
+
+            
+    return
+
+
+                
+
+
+if __name__ == '__main__':
+        main()

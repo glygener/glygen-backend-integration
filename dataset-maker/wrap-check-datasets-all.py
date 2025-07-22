@@ -4,8 +4,6 @@ import commands
 from optparse import OptionParser
 import glob
 import json
-import pymongo
-from pymongo import MongoClient
 
 import libgly
 
@@ -39,7 +37,8 @@ def main():
     path_obj = config_obj["pathinfo"]
     
     ds_obj_list = json.loads(open(path_obj["misc"] +  "dataset-masterlist.json", "r").read())     
-
+    in_file = path_obj["misc"] +  "dependent_ds_list.json"
+    dep_ds_dict = json.loads(open(in_file, "r").read())   
     for obj in ds_obj_list:
         ds_name = obj["name"]
         ds_format = obj["format"]
@@ -55,14 +54,16 @@ def main():
             cmd = "wc %s" % (out_file)
             n_lines = commands.getoutput(cmd).strip().split(" ")[0]
             flag = "failed" if n_lines in ["0", "1"] or os.path.isfile(out_file) == False else "passed"
-            print flag, "%s %s %s" % (molecule, ds_name, ds_format)
+            dep_flag = dep_ds_dict[ds_name] if ds_name in dep_ds_dict else ""
+            print flag, "%s %s %s %s" % (molecule, ds_name, ds_format, dep_flag)
         else:
             for species in obj["categories"]["species"]:
                 out_file = path_obj["unreviewed"] + "%s_%s_%s.%s" % (species,molecule,ds_name, ds_format)
                 cmd = "wc %s" % (out_file)
                 n_lines = commands.getoutput(cmd).strip().split(" ")[0]
                 flag = "failed" if n_lines in ["0", "1"] or os.path.isfile(out_file) == False else "passed"
-                print flag, "%s %s %s %s" % (species,molecule,ds_name, ds_format)
+                dep_flag = dep_ds_dict[ds_name] if ds_name in dep_ds_dict else ""
+                print flag, "%s %s %s %s %s" % (species,molecule,ds_name, ds_format, dep_flag)
 
 
 

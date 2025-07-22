@@ -1,6 +1,235 @@
 import csv
 import json
 import re
+import glob
+import datetime
+import pytz
+
+def load_dictionaries(map_dict, misc_dir):
+
+    dict_list_obj = json.loads(open("conf/dictionaries.json", "r").read())
+    for dict_name in dict_list_obj:
+        map_dict[dict_name] = {}
+        ind_list = dict_list_obj[dict_name]["indexlist"]
+        for pattern in dict_list_obj[dict_name]["fileglob"]:
+            for in_file in glob.glob(misc_dir + pattern):
+                sheet_obj = {}
+                load_sheet(sheet_obj, in_file, [],",")
+                for row in sheet_obj["data"]:
+                    if row ==[] or row[ind_list[0]][0] == "#":
+                        continue
+                    key = row[ind_list[0]]
+                    val = row[ind_list[1]]
+                    if key not in map_dict[dict_name]:
+                        map_dict[dict_name][key] = []
+
+                    map_dict[dict_name][key].append(val)
+
+    for k in map_dict["xrefkey2category"]:
+        kk =  k.replace(".csv", "").replace("*_", "")
+        map_dict["xrefkey2category"][kk] = map_dict["xrefkey2category"][k]
+        if k != kk:
+            map_dict["xrefkey2category"].pop(k)
+
+    for kk in map_dict["xrefkey2category"]:
+        tmp_list = []
+        for v in map_dict["xrefkey2category"][kk]:
+            tmp_list += v.split("|")
+        map_dict["xrefkey2category"][kk] = list(set(tmp_list))
+
+    return
+
+
+def load_aa_format_dict():
+
+    data_frame = {}
+    in_file = "generated/misc/aadict.csv"
+    load_sheet(data_frame, in_file, [], ",")
+    aa_format_dict = {"one":{}, "three":{}, "glytype":{}}
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        three = row[f_list.index("three")]
+        one = row[f_list.index("one")]
+        gly_type = row[f_list.index("gly_type")]
+        form_list = [one, one.lower(), one.upper(), three, three.lower(), three.upper()]
+        for f in form_list:
+            aa_format_dict["three"][f] = three
+            aa_format_dict["one"][f] = one
+            aa_format_dict["glytype"][f] = gly_type
+    return aa_format_dict
+
+
+
+
+#biomarker
+#"biomarkers.biomarker_id"
+#"biomarkers.assessed_biomarker_entity"
+#"biomarkers.best_biomarker_role.role"
+#"biomarkers.condition.recommended_name.id"
+#"biomarkers.condition.synonyms.id"
+#"biomarkers.condition.recommended_name.name"
+#"biomarkers.condition.synonyms.name"
+
+
+
+#"biomarker_component": [
+#            {
+#                "biomarker": "increased IL6 level",
+#                "assessed_biomarker_entity": {
+#                    "recommended_name": "Interleukin-6",
+
+
+
+def get_biomarker_dict(record_type):
+
+    file_list = glob.glob("jsondb/biomarkerdb/*.json")
+    biomarker_dict = {}
+    for in_file in file_list:
+        doc = json.loads(open(in_file, "r").read())
+        obj = {}
+        k_list = ["biomarker_id", "biomarker_canonical_id"]
+        for k in k_list:
+            obj[k] = doc[k] 
+
+        role_dict = {}
+        for o in doc["best_biomarker_role"]:
+            role_dict[o["role"]] = True
+        obj["best_biomarker_role"] = list(role_dict.keys())
+
+        name_dict, id_dict = {}, {}
+        o = doc["condition"]
+        name_dict[o["recommended_name"]["name"]] = True
+        id_dict[o["recommended_name"]["id"]] = True
+        for oo in o["synonyms"]:
+            name_dict[oo["name"]] = True
+            id_dict[oo["id"]] = True
+        name_list = list(name_dict.keys())
+        id_list = list(id_dict.keys())
+        obj["condition"] = {
+            "id":o["id"],
+            "recommended_name":o["recommended_name"],
+            "name_list":name_list, 
+            "id_list":id_list
+        }
+
+
+        obj["evidence"] = []
+        seen_evdn = {}
+        for oo in doc["evidence_source"]:
+            for kk in ["tags", "evidence_list"]:
+                if kk in oo:
+                    oo.pop(kk)
+            evdn_combo_id = "%s|%s"  % (oo["id"], oo["database"])
+            if evdn_combo_id not in seen_evdn:
+                obj["evidence"].append(oo)
+                seen_evdn[evdn_combo_id] = True
+
+        ac_list = []
+        name_dict_one, name_dict_two = {}, {}
+        for o in doc["biomarker_component"]:
+            entity_id = o["assessed_biomarker_entity_id"]
+            entity_type = o["assessed_entity_type"]
+            name_dict_two[o["biomarker"]] = True
+            if entity_type in [record_type]:
+                name_dict_one[o["assessed_biomarker_entity"]["recommended_name"]] = True
+                if "synonyms" in o:
+                    for oo in o["synonyms"]:
+                        name_dict_one[oo["synonym"]] = True
+                ac_list.append(entity_id)
+                for oo in o["evidence_source"]:
+                    for kk in ["tags", "evidence_list"]:
+                        if kk in oo:
+                            oo.pop(kk)
+                    evdn_combo_id = "%s|%s"  % (oo["id"], oo["database"])
+                    if evdn_combo_id not in seen_evdn:
+                        obj["evidence"].append(oo)
+                        seen_evdn[evdn_combo_id] = True
+
+        obj["assessed_biomarker_entity"] = list(name_dict_one.keys())
+        obj["biomarker"] = list(name_dict_two.keys())
+        for ac in ac_list:
+            if ac not in biomarker_dict:
+                biomarker_dict[ac] = []
+            biomarker_dict[ac].append(obj)
+    return biomarker_dict
+
+
+
+def write_log_msg(log_file, msg, m):
+
+    ts = datetime.datetime.now(pytz.timezone('US/Eastern')).strftime('%Y-%m-%d %H:%M:%S')
+    with open(log_file, m) as FW:
+        FW.write("%s %s\n" % (ts, msg))
+    return
+
+
+def get_expected_dslist(record_type, sec_name_list, order_dict):
+
+    file_name_dict = {}
+    ds_obj_list = json.loads(open("generated/misc/dataset-masterlist.json", "r").read())
+    sec_info = json.loads(open("generated/misc/%s_sectioninfo.json" % (record_type), "r").read())
+
+
+    for obj in ds_obj_list:
+        ds_name = obj["name"]
+        ds_format = obj["format"]
+        mol = obj["categories"]["molecule"]
+        if ds_name in ["homolog_alignments", "isoform_alignments"]:
+            continue
+        if obj["categories"]["species"] == []:
+            if obj["integration_status"]["status"] == "integrate_all":
+                record_type_new = "glycan" if record_type == "motif" else record_type
+                if record_type_new in obj["target_objects"]:
+                    file_name = "%s_%s" % (mol, ds_name)
+                    ordr = 100
+                    for p in order_dict:
+                        if file_name.find(p) != -1:
+                            ordr = order_dict[p]
+                    file_name_dict[file_name] = ordr
+        elif record_type != "motif" and obj["integration_status"]["status"] != "integrate_none":
+            sp_list_one = sorted(obj["categories"]["species"])
+            for species in sp_list_one:
+                if species not in obj["integration_status"]["excludelist"]:
+                    record_type_new = "glycan" if record_type == "motif" else record_type
+                    if record_type_new in obj["target_objects"]:
+                        file_name = "%s_%s_%s" % (species, mol, ds_name)
+                        ordr = 100
+                        for p in order_dict:
+                            if file_name.find(p) != -1:
+                                ordr = order_dict[p]
+                        file_name_dict[file_name] = ordr
+
+
+
+
+    pattern_list = []
+    if sec_name_list != []:
+        for sec_name in sec_name_list:
+            pattern_list +=  sec_info[sec_name]["sheetlist"]
+        if record_type == "protein":
+            for i in range(0, len(pattern_list)):
+                pattern_list[i] = "human_" + pattern_list[i]
+    else:
+        for sec in sec_info:
+            pattern_list += sec_info[sec]["sheetlist"]
+    pattern_list = list(set(pattern_list))
+
+
+
+    s_file_name_dict = dict(sorted(file_name_dict.items(), key=lambda x:x[1]))
+
+    expected_dslist = []
+    for file_name in s_file_name_dict:
+        cond_list = []
+        for pat in pattern_list:
+            cond_list += [file_name.find(pat) != -1]
+        if list(set(cond_list)) != [False]:
+            expected_dslist.append(file_name)
+
+    return expected_dslist
+
+
+
 
 def extractsingleseqsites(df_list, table_ind, action_obj):
 
@@ -425,8 +654,8 @@ def load_sheet_as_dict(sheet_obj, in_file, separator, anchor_field):
 
 
     f_list = []
-    with open(in_file, 'r') as FR:
-        csv_grid = csv.reader(FR, delimiter=separator, quotechar='\"')
+    with open(in_file, 'r', encoding="utf-8-sig") as FR:
+        csv_grid = csv.reader(FR, delimiter=separator, quotechar="\"")
         row_count = 0
         for row in csv_grid:
             if json.dumps(row) in seen:
@@ -441,6 +670,8 @@ def load_sheet_as_dict(sheet_obj, in_file, separator, anchor_field):
                         continue
                     sheet_obj["fields"].append(row[j].strip().replace("\"", ""))
             else:
+                if len(f_list) != len(row):
+                    continue
                 new_row = []
                 for j in range(0, len(row)):
                     if f_list[j] == anchor_field:
@@ -517,6 +748,36 @@ def get_sheet_stats(in_file, separator):
     return field_count, row_count, id_count
 
 
+def get_sheet_stats_detailed(in_file, separator):
+
+    seen_row, seen = {}, {}
+    row_count, id_count, field_count = 0, 0, 0
+    f_list = []
+    with open(in_file, 'r') as FR:
+        csv_grid = csv.reader(FR, delimiter=",", quotechar='\"')
+        idx = 0
+        for row in csv_grid:
+            if json.dumps(row) in seen_row:
+                continue
+            seen_row[json.dumps(row)] = True
+            if idx == 0:
+                field_count = len(row)
+                f_list = row
+                for f in f_list:
+                    seen[f] = {}
+            else:
+                row_count += 1
+                for j in range(0, len(f_list)):
+                    seen[f_list[j]][row[j]] = True 
+            idx += 1
+
+    res_obj = {"uniquecount":{}, "rowcount":row_count}
+    for f in seen:
+        res_obj["uniquecount"][f] = len(list(seen[f].keys()))
+
+    return res_obj
+
+
 def load_sheet(sheet_obj, in_file, field_list, separator):
 
     seen = {}
@@ -524,7 +785,7 @@ def load_sheet(sheet_obj, in_file, field_list, separator):
     sheet_obj["data"] = []
     field_ind_list = []
     with open(in_file, 'r') as FR:
-        csv_grid = csv.reader(FR, delimiter=",", quotechar='\"')
+        csv_grid = csv.reader(FR, delimiter=separator, quotechar='\"')
         row_count = 0
         ncols = 0
         for row in csv_grid:

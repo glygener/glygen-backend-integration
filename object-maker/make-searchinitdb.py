@@ -4,10 +4,9 @@ from optparse import OptionParser
 import glob
 from bson import json_util, ObjectId
 import json
-import pymongo
-from pymongo import MongoClient
 
 import libgly
+import csvutil
 
 __version__="1.0"
 __status__ = "Dev"
@@ -16,7 +15,7 @@ __status__ = "Dev"
 def get_doc_list(coll, k_list):
 
 
-    file_list = glob.glob("jsondb/" + coll.replace("c_", "") + "db/*")
+    file_list = glob.glob("jsondb/" + coll.replace("c_", "") + "db/" + PATTERN)
     doc_list = []
     for f in file_list:
         doc = json.loads(open(f, "r").read())
@@ -100,6 +99,44 @@ def get_field_limits(limits_info):
     return res_obj
 
 
+def get_disease_search_init(collection):
+
+    res_obj = {}
+  
+    seen = {"organism":{}, "biomarker_types":{}}
+    file_list = glob.glob("jsondb/" + collection.replace("c_", "") + "db/" + PATTERN)
+    for f in file_list:
+        doc = json.loads(open(f, "r").read())
+        for sec in ["proteins", "glycans"]:
+            for obj in doc[sec]:
+                for o in obj["species"]:
+                    if o["glygen_name"] != "":
+                        org_obj_str = json.dumps({ "name": o["glygen_name"], "id":o["taxid"]})
+                        seen["organism"][org_obj_str] = True
+        if doc["biomarkers"] != []:
+            for obj in doc["biomarkers"]:
+                for o in obj["best_biomarker_role"]:
+                    seen["biomarker_types"][o["role"]] = True
+
+
+    res_obj["organism"] = []
+    for org_obj_str in seen["organism"]:
+        res_obj["organism"].append(json.loads(org_obj_str))
+
+    res_obj["biomarker_types"] =  list(seen["biomarker_types"].keys())
+
+    res_obj["simple_search_category"] = [
+         {"id":"any", "display":"Any"}
+        ,{"id":"organism", "display":"Organism"}
+        ,{"id":"protein", "display":"Protein"}
+        ,{"id":"glycan", "display":"Glycan"}
+        ,{"id":"biomarker", "display":"Biomarker"}
+    ]
+
+
+    return res_obj
+
+
 def get_site_search_init(collection):
     
     res_obj = {}
@@ -131,10 +168,20 @@ def get_site_search_init(collection):
 
 
 def get_glycan_search_init(collection):
-   
+
+    species_map = json.loads(open("generated/misc/species_map.json", "r").read())
+    tax_id_map = {}
+    for tax_id in species_map:
+        tax_id_map[tax_id] = species_map[tax_id]["ref_tax_id"]
+  
+ 
     tax_id_list = []
     for species in species_list:
-        tax_id_list.append(species_obj[species]["tax_id"])
+        tax_id = species_obj[species]["tax_id"]
+        tax_id_list.append(tax_id)
+        if tax_id in tax_id_map:
+            tax_id_list.append(tax_id_map[tax_id])
+    tax_id_list = sorted(list(set(tax_id_list)))
 
     res2cid = {}
     lines = open("generated/misc/monosaccharide_residue_name.csv", "r").read().split("\n")[1:]
@@ -167,11 +214,12 @@ def get_glycan_search_init(collection):
     min_monosaccharides = 100000
     max_monosaccharides = -min_monosaccharides
 
-    seen = {"glycan_type":{}, "organism":{}, "id_namespace":{}}
+    seen = {"biomarker_types":{}, "glycan_type":{}, "organism":{}, "id_namespace":{}}
+    seen_glygen_name = {}
 
     k_list = [
         "glytoucan_ac", "mass", "mass_pme", "number_monosaccharides","species","composition",
-        "classification", "crossref"
+        "classification", "crossref", "biomarkers"
     ]
     comp_dict = {}
     doc_list = get_doc_list(collection, k_list)
@@ -190,15 +238,26 @@ def get_glycan_search_init(collection):
                 max_mass_pme = round(obj["mass_pme"], 2) if obj["mass_pme"] > max_mass_pme else max_mass_pme
 
 
+        if "biomarkers" in obj:
+            for o in obj["biomarkers"]:
+                for role in o["best_biomarker_role"]:
+                    seen["biomarker_types"][role] = True
+            
+
         if "number_monosaccharides" in obj:
             min_monosaccharides = obj["number_monosaccharides"] if obj["number_monosaccharides"] < min_monosaccharides else min_monosaccharides
             max_monosaccharides = obj["number_monosaccharides"] if obj["number_monosaccharides"] > max_monosaccharides else max_monosaccharides
 
         if "species" in obj:
             for o in obj["species"]:
-                if o["taxid"] in tax_id_list:
-                    org_obj_str = json.dumps({ "name": o["name"], "id":o["taxid"]})
-                    seen["organism"][org_obj_str] = True
+                #if o["taxid"] not in tax_id_list:
+                #    continue
+                if o["glygen_name"] != "":
+                    if o["glygen_name"] not in seen_glygen_name:
+                        org_obj_str = json.dumps({ "name": o["glygen_name"], "id":o["taxid"]})
+                        seen["organism"][org_obj_str] = True
+                        seen_glygen_name[o["glygen_name"]] = True
+
 
         if "composition" in obj:
             for o in obj["composition"]:
@@ -219,6 +278,7 @@ def get_glycan_search_init(collection):
                     seen["glycan_type"][type_name] = {}
                 if "subtype" in o:
                     subtype_name = o["subtype"]["name"]
+                    subtype_name = "other" if subtype_name.lower() == "other" else subtype_name
                     if subtype_name not in seen["glycan_type"][type_name]:
                         seen["glycan_type"][type_name][subtype_name] = True 
         
@@ -237,6 +297,7 @@ def get_glycan_search_init(collection):
     res_obj["number_monosaccharides"]["max"] = max_monosaccharides 
 
     res_obj["id_namespace"] = list(seen["id_namespace"].keys())
+    res_obj["biomarker_types"] =  list(seen["biomarker_types"].keys())
 
     for type_name in seen["glycan_type"]:
         o = {"name":type_name,"subtype":[]}
@@ -259,6 +320,7 @@ def get_glycan_search_init(collection):
     res_obj["composition"] = []
     for res in comp_dict:
         res_obj["composition"].append(comp_dict[res])
+
 
     return res_obj
 
@@ -329,34 +391,64 @@ def get_usecases_search_init():
     "species_to_glycohydrolases":"glycohydrolase-activity",
     "species_to_glycoproteins":"glycoprotein"
     }
+
+    evdn_lbl_dict = {
+        "all_sites": "All sites",
+        "all_reported_sites_with_without_glycans": "All reported sites (with or without Glycans)",
+        "sites_reported_with_glycans": "Sites reported with Glycans",
+        "sites_reported_without_glycans": "Sites reported without Glycans",
+        "predicted_sites": "Predicted sites",
+        "sites_detected_by_literature_mining": "Sites detected by literature mining"
+    }
     
-    doc_list = get_doc_list("c_protein", ["species", "keywords"])
-    for svc in query_dict:
-        for doc in doc_list:
-            if query_dict[svc] not in doc["keywords"]:
+
+
+ 
+    #doc_list = get_doc_list("c_protein", ["uniprot_canonical_ac", "species", "keywords"])
+    file_list = glob.glob("jsondb/proteindb/*.json")
+    for in_file in file_list:
+        protein_doc = json.load(open(in_file))
+        list_file = "jsondb/listdb/" + in_file.split("/")[-1]
+        if os.path.isfile(list_file) == False:
+            continue
+        doc = json.load(open(list_file))
+        obj = {"tax_id":doc["tax_id"], "tax_name":doc["organism"]}
+        obj["keywords"] = protein_doc["keywords"]
+        if len(protein_doc["glycosylation"]) > 0:
+            obj["keywords"].append("all_sites")  
+        #waiting for clarification for all_reported_sites_with_without_glycans 
+        if doc["reported_n_glycosites_with_glycan"] + doc["reported_o_glycosites_with_glycan"] > 0:
+            obj["keywords"].append("sites_reported_with_glycans")
+        elif doc["reported_n_glycosites"] + doc["reported_o_glycosites"] > 0:
+            obj["keywords"].append("sites_reported_without_glycans")
+        if doc["mined_glycosites"] > 0:
+            obj["keywords"].append("sites_detected_by_literature_mining")
+        if doc["predicted_glycosites"] > 0:
+            obj["keywords"].append("predicted_sites")
+
+        if "sites_reported_with_glycans" in obj["keywords"] or "sites_reported_without_glycans" in obj["keywords"]:
+            obj["keywords"].append("all_reported_sites_with_without_glycans")
+
+        for svc in query_dict:
+            if query_dict[svc] not in obj["keywords"]:
                 continue
-            tax_id, tax_name = doc["species"][0]["taxid"], doc["species"][0]["name"]        
+            tax_id, tax_name = obj["tax_id"], obj["tax_name"]        
             if tax_id not in res_obj[svc]["organism"]:
                 res_obj[svc]["organism"][tax_id] = {"id":tax_id, "name":tax_name}
             if svc == "species_to_glycoproteins":
                 if "evidence_type" not in res_obj[svc]["organism"][tax_id]:
-                    res_obj[svc]["organism"][tax_id]["evidence_type"] = []
-                seen = {}
-                for k in ["reported", "predicted"]:
-                    for kw in doc["keywords"]:
-                        if kw.find(k) != -1:
-                            seen[k] = True
-                for evdn_type in list(seen.keys()):
-                    if evdn_type not in res_obj[svc]["organism"][tax_id]["evidence_type"]:
-                        res_obj[svc]["organism"][tax_id]["evidence_type"].append(evdn_type)
+                    res_obj[svc]["organism"][tax_id]["evidence_type"] = {}
+                for kw in obj["keywords"]:
+                    if kw in evdn_lbl_dict:
+                        res_obj[svc]["organism"][tax_id]["evidence_type"][kw] = True
 
     svc = "species_to_glycoproteins"
     for tax_id in res_obj[svc]["organism"]:
-        evdn_list = res_obj[svc]["organism"][tax_id]["evidence_type"]
-        if "reported" in evdn_list and "predicted" in evdn_list:
-            res_obj[svc]["organism"][tax_id]["evidence_type"].append("both")
-
-
+        o_list = []
+        for kw in res_obj[svc]["organism"][tax_id]["evidence_type"]:
+            o_list.append({"id":kw, "display":evdn_lbl_dict[kw]})
+        res_obj[svc]["organism"][tax_id]["evidence_type"] = o_list
+ 
 
     return res_obj
 
@@ -378,7 +470,46 @@ def get_super_search_init():
 
     return res_obj
 
+def get_biomarker_search_init(collection):
 
+
+    k_list = ["biomarker_id", "best_biomarker_role", "biomarker_component"]
+    doc_list = get_doc_list(collection, k_list)
+    
+
+    res_obj = {}
+    seen = {}
+    f_list = ["best_biomarker_role", "assessed_entity_type"]
+    for f in f_list:
+        seen[f] = {}
+
+    for doc in doc_list:
+        f = "best_biomarker_role"
+        if f in doc:
+            for obj in doc[f]:
+                val = obj["role"]
+                seen[f][val] = True
+        
+        
+        f = "assessed_entity_type"
+        if "biomarker_component" in doc:
+            for obj in doc["biomarker_component"]:
+                val = obj[f]
+                seen[f][val] = True
+       
+
+    for f in f_list:
+        res_obj[f] =  list(seen[f].keys())
+
+    res_obj["simple_search_category"] = [
+         {"id":"any", "display":"Any"}
+        ,{"id":"biomarker", "display":"Biomarker"}
+        ,{"id":"condition", "display":"Condition"}
+    ]
+
+
+
+    return res_obj
 
 def get_protein_search_init(collection):
 
@@ -394,9 +525,10 @@ def get_protein_search_init(collection):
 
     seen = {"protein_mass":{}, "organism":{}, "amino_acid":{}, 
             "glycosylation_types":{}, 
+            "biomarker_types":{},
             "id_namespace":{}
     }
-    k_list = ["uniprot_canonical_ac", "mass","species","glycosylation", "crossref"]
+    k_list = ["uniprot_canonical_ac", "mass","species","glycosylation", "crossref", "biomarkers"]
 
     for tax_id in tax_id_list:
         q_obj = {"species.taxid":{"$eq":tax_id}}
@@ -412,23 +544,31 @@ def get_protein_search_init(collection):
             if "species" in obj:
                 for o in obj["species"]:
                     if o["taxid"] in tax_id_list:
-                        org_obj_str = json.dumps({ "name": o["name"], "id":o["taxid"]})
-                        seen["organism"][org_obj_str] = True
+                        if o["glygen_name"] != "":
+                            org_obj_str = json.dumps({ "name": o["glygen_name"], "id":o["taxid"]})
+                            seen["organism"][org_obj_str] = True
+            if "biomarkers" in obj:
+                for o in obj["biomarkers"]:
+                    for role in o["best_biomarker_role"]:
+                        seen["biomarker_types"][role] = True
+
             if "glycosylation" in obj:
                 for o in obj["glycosylation"]:
                     if "residue" in o:
                         seen["amino_acid"][o["residue"]] = True
                     if "type" in o:
-                        if o["type"] != "":
-                            g_type = o["type"][0].upper() + o["type"][1:].lower()
-                            if g_type not in seen["glycosylation_types"]:
-                                seen["glycosylation_types"][g_type] = {}
-                            if "subtype" in o:
-                                if o["subtype"] != "":
-                                    g_subtype = o["subtype"]
-                                    if g_subtype[0:2] == "O-" or g_subtype[0:2] == "C-":
-                                        g_subtype = g_subtype[0:2] + g_subtype[2].upper() + g_subtype[3:]
-                                    seen["glycosylation_types"][g_type][g_subtype] = True
+                        if o["type"].find(";") == -1:
+                            if o["type"] != "":
+                                g_type = o["type"][0].upper() + o["type"][1:].lower()
+                                if g_type not in seen["glycosylation_types"]:
+                                    seen["glycosylation_types"][g_type] = {}
+                                if "subtype" in o:
+                                    if o["subtype"] != "":
+                                        g_subtype = o["subtype"]
+                                        g_subtype = "other" if g_subtype.lower() == "other" else g_subtype
+                                        if g_subtype[0:2] == "O-" or g_subtype[0:2] == "C-":
+                                            g_subtype = g_subtype[0:2] + g_subtype[2].upper() + g_subtype[3:]
+                                        seen["glycosylation_types"][g_type][g_subtype] = True
 
             if "crossref" in obj:
                 for o in obj["crossref"]:
@@ -444,6 +584,7 @@ def get_protein_search_init(collection):
     for g_type in seen["glycosylation_types"]:
         res_obj["glycosylation_types"][g_type] = list(seen["glycosylation_types"][g_type].keys())
 
+    res_obj["biomarker_types"] =  list(seen["biomarker_types"].keys())
 
     res_obj["simple_search_category"] = [
          {"id":"any", "display":"Any"}
@@ -454,12 +595,26 @@ def get_protein_search_init(collection):
         ,{"id":"disease", "display":"Disease"}
         ,{"id":"pathway", "display":"Pathway"}
     ] 
+    
+
 
     res_obj["aa_list"] = []
     for aathree in seen["amino_acid"]:
         if aathree not in aa_dict:
             continue
         res_obj["aa_list"].append(aa_dict[aathree])
+
+    res_obj["glycosylation_evidence_type"] = [
+        { "id": "all_sites", "display": "All sites"},
+        { "id": "all_reported_sites_with_without_glycans","display": "All reported sites (with or without Glycans)"},
+        { "id": "sites_reported_with_glycans", "display": "Sites reported with Glycans"},
+        { "id": "sites_reported_without_glycans", "display": "Sites reported without Glycans"},
+        { "id": "predicted_sites", "display": "Predicted sites"},
+        { "id": "sites_detected_by_literature_mining", "display": "Sites detected by literature mining"}
+    ]
+
+
+
 
     return res_obj
 
@@ -520,65 +675,113 @@ def main():
         global species_obj
         global species_list
         global aa_dict
+        global PATTERN 
 
-             
+
+        DEBUG = False
+        #DEBUG = True
+
+        PATTERN = "*"
+        if DEBUG:
+            PATTERN = "P142*"
+
         config_obj = json.loads(open("../conf/config.json", "r").read())
         path_obj  =  config_obj[config_obj["server"]]["pathinfo"]
         root_obj =  config_obj[config_obj["server"]]["rootinfo"]
         
         aa_dict = get_aa_dict()
 
-        species_obj = {}
-        in_file = path_obj["misc"]+ "/species_info.csv"
-        libgly.load_species_info(species_obj, in_file)
+        cat_file = "generated/misc/simple_search_categories.json"
+        cat_dict  = json.load(open(cat_file))
         
+
+        species_obj = {}
+        in_file = "generated/misc/species_info.csv"
+        libgly.load_species_info(species_obj, in_file)
+
         species_list = []
         for k in species_obj:
             obj = species_obj[k]
             if obj["short_name"] not in species_list and obj["is_reference"] == "yes":
                 species_list.append(obj["short_name"])
-        
 
-        try:
+        log_file = "logs/make-searchinitdb.log"
+        msg = "make-searchinitdb: stareted logging"
+        csvutil.write_log_msg(log_file, msg, "w")
 
-            out_obj = {}
 
-            print ("Started get_glycan_search_init ... ")
-            out_obj["glycan"] = get_glycan_search_init("c_glycan")
-            print ("Finished.")
+        out_obj = {}
 
-            print ("Started get_usecases_search_init ...")
-            out_obj["usecases"] = get_usecases_search_init()
-            print ("Finished.")
 
-            print ("Started get_idmapping_search_init ...")
-            out_obj["idmapping"] = get_idmapping_search_init()
-            print ("Finished.")
+        msg = "make-searchinitdb: ... started get_disease_search_init"
+        csvutil.write_log_msg(log_file, msg, "a")
+        out_obj["disease"] = get_disease_search_init("c_disease")
+        msg = "make-searchinitdb: done!"
+        csvutil.write_log_msg(log_file, msg, "a")
+        #print (json.dumps(out_obj, indent=4))
 
-            print ("Started get_site_search_init ...")
-            out_obj["site"] = get_site_search_init("c_site")
-            print ("Finished.")
 
-            print ("Started get_super_search_init ...")
-            out_obj["supersearch"] = get_super_search_init()
-            print ("Finished.")
 
-            print ("Started get_field_limits ...")
-            out_obj["fieldlimits"] = get_field_limits(config_obj["fieldlimitinfo"])
-            print ("Finished.")
+        msg = "make-searchinitdb: ... started get_usecases_search_init"
+        csvutil.write_log_msg(log_file, msg, "a")
+        out_obj["usecases"] = get_usecases_search_init()
+        msg = "make-searchinitdb: done!"
+        csvutil.write_log_msg(log_file, msg, "a")
 
-            print ("Started get_protein_search_init ...")
-            out_obj["protein"] = get_protein_search_init("c_protein")
-            print ("Finished.")
+ 
+        msg = "make-searchinitdb: ... started get_biomarker_search_init"
+        csvutil.write_log_msg(log_file, msg, "a")
+        out_obj["biomarker"] = get_biomarker_search_init("c_biomarker")
+        msg = "make-searchinitdb: done!"
+        csvutil.write_log_msg(log_file, msg, "a")
 
-            out_file = path_obj["jsondbpath"] + "/searchinitdb/searchinitdb.json"
-            with open(out_file, "w") as FW:
-                FW.write("%s\n" % (json.dumps(out_obj, indent=4)))
-            print ("make-searchinitdb: final created: %s searchinitdb objects" % (1))
-        except pymongo.errors.ServerSelectionTimeoutError as err:
-            print (err)
-        except pymongo.errors.OperationFailure as err:
-            print (err)
+            
+        msg = "make-searchinitdb: ... started get_glycan_search_init"
+        csvutil.write_log_msg(log_file, msg, "a")
+        out_obj["glycan"] = get_glycan_search_init("c_glycan")
+        msg = "make-searchinitdb: done!"
+        csvutil.write_log_msg(log_file, msg, "a")
+
+        msg = "make-searchinitdb: ... started get_idmapping_search_init"
+        csvutil.write_log_msg(log_file, msg, "a")
+        out_obj["idmapping"] = get_idmapping_search_init()
+        msg = "make-searchinitdb: done!"
+        csvutil.write_log_msg(log_file, msg, "a")
+
+        msg = "make-searchinitdb: ... started get_site_search_init"
+        csvutil.write_log_msg(log_file, msg, "a")
+        out_obj["site"] = get_site_search_init("c_site")
+        msg = "make-searchinitdb: done!"
+        csvutil.write_log_msg(log_file, msg, "a")
+
+        msg = "make-searchinitdb: ... started get_super_search_init"
+        csvutil.write_log_msg(log_file, msg, "a")
+        out_obj["supersearch"] = get_super_search_init()
+        msg = "make-searchinitdb: done!"
+        csvutil.write_log_msg(log_file, msg, "a")
+            
+        msg = "make-searchinitdb: ... started get_field_limits"
+        csvutil.write_log_msg(log_file, msg, "a")
+        out_obj["fieldlimits"] = get_field_limits(config_obj["fieldlimitinfo"])
+        msg = "make-searchinitdb: done!"
+        csvutil.write_log_msg(log_file, msg, "a")
+            
+        msg = "make-searchinitdb: ... started get_protein_search_init"
+        csvutil.write_log_msg(log_file, msg, "a")
+        out_obj["protein"] = get_protein_search_init("c_protein")
+        msg = "make-searchinitdb: done!"
+        csvutil.write_log_msg(log_file, msg, "a")
+
+
+        for r_type in ["protein", "glycan", "biomarker"]:
+            if r_type in out_obj and r_type in cat_dict:
+                out_obj[r_type]["simple_search_category"] = cat_dict[r_type]
+           
+        out_file = "jsondb/searchinitdb/searchinitdb.json"
+        with open(out_file, "w") as FW:
+            FW.write("%s\n" % (json.dumps(out_obj, indent=4)))
+        msg = "make-searchinitdb: final created: %s searchinitdb objects" % (1)
+        csvutil.write_log_msg(log_file, msg, "a")
 
 
 

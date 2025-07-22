@@ -30,6 +30,200 @@ __version__="1.0"
 __status__ = "Dev"
 
 
+def cluster_pdb_ids(in_dict):
+
+    obj_dict = {}
+    for pdb_id in in_dict:
+        for r in in_dict[pdb_id]:
+            s, e = int(r.split("-")[0]), int(r.split("-")[1])
+            range_size = e - s
+            if range_size not in obj_dict:
+                obj_dict[range_size] = []
+            obj_dict[range_size].append({"pdb_id":pdb_id, "s":s, "e":e})
+    
+    obj_list = []
+    for range_size in sorted(obj_dict.keys(), reverse=True):
+        obj_list += obj_dict[range_size]
+
+
+    is_merged = {}
+    cls_mat = []
+    for i in range(0, len(obj_list)):
+        obj_i = obj_list[i]
+        obj_i_s = "%s|%s|%s" % (obj_i["pdb_id"], obj_i["s"], obj_i["e"])
+        if obj_i_s in is_merged:
+            continue
+        obj_i["overlap"] = 1.0
+        obj_i["overlap_cat"] = 0.75
+        cls_list = [obj_i]
+        is_merged[obj_i_s] = True
+        for j in range(0, len(obj_list)):
+            obj_j = obj_list[j]
+            obj_j_s = "%s|%s|%s" % (obj_j["pdb_id"], obj_j["s"], obj_j["e"])
+            if i == j or obj_j_s in is_merged:
+                continue
+            min_e, max_s = min(obj_i["e"], obj_j["e"]), max(obj_i["s"], obj_j["s"])
+            overlap = round(float(min_e - max_s)/float(obj_i["e"] - obj_i["s"]), 2)
+            overlap_cat = 0.00
+            overlap_cat = 0.25 if overlap >= 0.25 else overlap_cat
+            overlap_cat = 0.50 if overlap >= 0.50 else overlap_cat
+            overlap_cat = 0.75 if overlap >= 0.75 else overlap_cat
+            if overlap > 0.5 or (obj_j["s"] >= obj_i["s"] and obj_j["e"] <= obj_i["e"]):
+                obj_j["overlap"] = overlap
+                obj_j["overlap_cat"] = overlap_cat
+                cls_list.append(obj_j)
+                is_merged[obj_j_s] = True
+        cls_mat.append(cls_list)
+
+
+    return cls_mat
+
+def extract_pdb_map_ds(species):
+
+    fasta_file = "unreviewed/%s_protein_canonicalsequences.fasta" % (species)
+    xref_file = "unreviewed/%s_protein_xref_alphafolddb.csv" % (species)
+
+    nt_file = species_obj[species]["nt_file"]
+    ebi_dir = "downloads/ebi/current/"
+    in_file = "%s%s" % (ebi_dir,nt_file)
+
+    range_dict = {}
+    method_dict = {}
+    resolution_dict = {}
+    with open(in_file, "r") as FR:
+        for line in FR:
+            if line.find(" <http://purl.uniprot.org/core/chain> ") != -1:
+                canon = line.strip().split(" ")[0].split("/")[-1].split("#")[0]
+                pdb_id = line.strip().split(" ")[0].split("/")[-1].split("#")[1].split("_")[1].lower()
+                chain = line.strip().split(" ")[-2].split("=")[0].replace("\"", "").lower()
+                pdb_cmb_id = "%s|%s" % (pdb_id, chain)
+                r = line.strip().split(" ")[-2].split("=")[-1].replace("\"","")
+                s, e = r.split("-")
+                if s.isdigit() and e.isdigit():
+                    if int(e) > int(s):
+                        if canon not in range_dict:
+                            range_dict[canon] = {}
+                        if pdb_cmb_id not in range_dict[canon]:
+                            range_dict[canon][pdb_cmb_id] = {}
+                        range_dict[canon][pdb_cmb_id][r] = True
+            elif line.find(" <http://purl.uniprot.org/core/method> ") != -1:
+                pdb_id = line.strip().split(" ")[0].split("/")[-1].replace(">", "").lower()
+                method = line.split(" ")[-2].split("/")[-1].replace(">", "")
+                if pdb_id not in method_dict:
+                    method_dict[pdb_id] = {}
+                method_dict[pdb_id][method] = True
+            elif line.find(" <http://purl.uniprot.org/core/resolution> ") != -1:
+                pdb_id = line.strip().split(" ")[0].split("/")[-1].replace(">", "").lower()
+                resolution = float(line.strip().split(" ")[2].split("^^")[0].replace("\"", ""))
+                if pdb_id not in resolution_dict:
+                    resolution_dict[pdb_id] = {}
+                resolution_dict[pdb_id][resolution] = True
+
+
+    method_ordr = ["X-Ray_Crystallography", "NMR_Spectroscopy", "Electron_Microscopy",
+        "Infrared_Spectroscopy", "Neutron_Diffraction"
+    ]
+
+
+    row = ["uniprotkb_canonical_ac","sequence_region","pdb_id","pdb_chain","start_pos","end_pos","overlap_ratio"]
+    row += ["overlap_category", "experimental_method", "resolution","selection_flag"]
+    print "\"%s\"" % ("\",\"".join(row))
+
+    canon_list = list(range_dict.keys())
+    #canon_list = ["Q9UKV8-1"]
+    for canon in canon_list:
+        if canon not in canon_dict:
+            continue
+        row_dict = {}
+        pdb_cmb_id_list = list(range_dict[canon].keys())
+        if len(pdb_cmb_id_list) == 1:
+            pdb_cmb_id = pdb_cmb_id_list[0]
+            pdb_id, chain = pdb_cmb_id.split("|")
+            range_list = list(range_dict[canon][pdb_cmb_id].keys())
+            method_list = list(method_dict[pdb_id].keys()) if pdb_id in method_dict else []
+            min_res = min(list(resolution_dict[pdb_id].keys())) if pdb_id in resolution_dict else 100
+            row_list = []
+            for method in method_ordr:
+                if method not in method_list:
+                    continue
+                for r in range_list:
+                    s, e = r.split("-")
+                    region = "region_1"
+                    row_list.append([canon,region,pdb_id,chain,str(s),str(e),"1.0","0.75",method, str(min_res)]) 
+            for row_idx in range(0, len(row_list)):
+                row = row_list[row_idx] + [str(row_idx == 0)]
+                s = int(row[4])
+                if s not in row_dict:
+                    row_dict[s] = []
+                row_dict[s].append(row)
+        else:
+            cls_mat = cluster_pdb_ids(range_dict[canon])
+            for i in range(0, len(cls_mat)):
+                cls_idx = i + 1
+                tmp_dict = {}
+                for mem_obj in cls_mat[i]:
+                    mem_pdb_id, mem_chain = mem_obj["pdb_id"].split("|")
+                    overlap = mem_obj["overlap"]
+                    overlap_cat = mem_obj["overlap_cat"]
+                    method_list = list(method_dict[mem_pdb_id].keys()) if mem_pdb_id in method_dict else []
+                    min_res = min(list(resolution_dict[mem_pdb_id].keys())) if mem_pdb_id in resolution_dict else 100
+                    for method in method_list:
+                        if method not in tmp_dict:
+                            tmp_dict[method] = {}
+                        if overlap_cat not in tmp_dict[method]:
+                            tmp_dict[method][overlap_cat] = {}
+                        if min_res not in tmp_dict[method][overlap_cat]:
+                            tmp_dict[method][overlap_cat][min_res] = []
+                        tmp_dict[method][overlap_cat][min_res].append(mem_obj)
+                row_list = []
+                for method in method_ordr:
+                    if method not in tmp_dict:
+                        continue
+                    for overlap_cat in sorted(tmp_dict[method], reverse=True):
+                        for min_res in sorted(tmp_dict[method][overlap_cat]):
+                            for mem_obj in tmp_dict[method][overlap_cat][min_res]:
+                                c, s, e, ovlp = mem_obj["pdb_id"], mem_obj["s"], mem_obj["e"], mem_obj["overlap"]
+                                c, chain = c.split("|")
+                                region = "region_%s" % (cls_idx)
+                                row_list.append([canon,region,c,chain,str(s),str(e),str(ovlp),str(overlap_cat),method, str(min_res)])
+                for row_idx in range(0, len(row_list)):
+                    row = row_list[row_idx] + [str(row_idx == 0)]
+                    s = int(row[4])
+                    if s not in row_dict:
+                        row_dict[s] = []
+                    row_dict[s].append(row)
+        for s in sorted(row_dict):
+            for row in row_dict[s]:
+                print "\"%s\"" % ("\",\"".join(row)) 
+
+
+    seq_hash = load_fasta_sequences(fasta_file)
+
+    data_frame = {}
+    libgly.load_sheet(data_frame, xref_file, ",")
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        canon = row[f_list.index("uniprotkb_canonical_ac")]
+        xref_id = row[f_list.index("xref_id")]
+        ac = canon.split("-")[0]
+        if ac != xref_id:
+            continue
+        pdb_id = "AF-%s-F1" % (canon.split("-")[0])
+        pdb_file = "downloads/pdb/current/%s.pdb" % (pdb_id)
+        if os.path.isfile(pdb_file) == False:
+            continue
+        s, e = 1, len(seq_hash[canon])
+        ovlp, overlap_cat, method, min_res = 1.0, 1.0, "AlphaFold", -1.0
+        region, chain = "global", "global"
+        newrow = [canon,region,pdb_id,chain,str(s),str(e),str(ovlp),str(overlap_cat),method, str(min_res), "True"]
+        print "\"%s\"" % ("\",\"".join(newrow))
+
+    
+
+    return
+
+
+
 def expand_rowcoll(rowcoll, val_list):
 
     newrowcoll = []
@@ -44,8 +238,12 @@ def expand_rowcoll(rowcoll, val_list):
 def get_alliance_genome_disease_rowlist(species):
     
     species2xref = {
+        "human":"unreviewed/human_protein_xref_hgnc.csv",
         "mouse":"unreviewed/mouse_protein_xref_mgi.csv",
-        "rat":"unreviewed/rat_protein_xref_rgd.csv"
+        "rat":"unreviewed/rat_protein_xref_rgd.csv",
+        "fruitfly":"unreviewed/fruitfly_protein_xref_flybase.csv",
+        "yeast":"unreviewed/yeast_protein_xref_sgd.csv",
+        "zebrafish":"unreviewed/zebrafish_protein_xref_zfin.csv"
     }
 
     row_list = []
@@ -57,12 +255,13 @@ def get_alliance_genome_disease_rowlist(species):
     for row in data_frame["data"]:
         xref2canon[row[f_list.index("xref_id")]] = row[f_list.index("uniprotkb_canonical_ac")]
 
-
     seen = {}
-    in_file = "downloads/alliance_genome/current/%s_disease_genome_alliance.csv" % (species)
+    #in_file = "downloads/alliance_genome/current/%s_disease_genome_alliance.tsv" % (species)
+    in_file = "downloads/alliance_genome/current/DISEASE-ALLIANCE_COMBINED.tsv"
     data_frame = {}
-    libgly.load_sheet(data_frame, in_file, ",")
+    libgly.load_sheet(data_frame, in_file, "\t")
     f_list = data_frame["fields"]
+
     for row in data_frame["data"]:
         if row[f_list.index("DBobjectType")] != "gene":
             continue
@@ -88,6 +287,7 @@ def get_alliance_genome_disease_rowlist(species):
 def get_genomics_england_disease_rowlist(species):
 
     mimid2doid = {}
+    mondoid2mimid = {}
     data_frame = {}
     in_file = path_obj["unreviewed"] +  "protein_disease_idmap.csv"
     libgly.load_sheet(data_frame, in_file, ",")
@@ -99,6 +299,7 @@ def get_genomics_england_disease_rowlist(species):
         xref_id = row[f_list.index("xref_id")]
         if xref_key == "protein_xref_omim":
             mimid2doid[xref_id] = "%s|%s" % (do_id, mondo_id)
+            mondoid2mimid[mondo_id] = xref_id
 
 
     data_frame = {}
@@ -140,13 +341,20 @@ def get_genomics_england_disease_rowlist(species):
             continue
         canon = genename2canon[gene_name]
         hgnc_id = genename2hgncid[gene_name]
+
         for p in phenotype_list:
             disease_name = " ".join(p.split(" ")[:-1])
-            mim_id = p.split(" ")[-1]
-            if mim_id in mimid2doid:
-                combo_id = mimid2doid[mim_id]
+            d_id = p.split(" ")[-1].split("\t")[-1].replace(")", "")
+            if d_id.find(":") != -1:
+                prefix, d_id = d_id.split(":")
+                if prefix == "MONDO" and d_id in mondoid2mimid:
+                    d_id = mondoid2mimid[d_id]
+
+            #print "Robel|%s|%s|%s" % (gene_name, d_id, d_id in mimid2doid)
+            if d_id in mimid2doid:
+                combo_id = mimid2doid[d_id]
                 for pmid in pmid_list:
-                    newrow = [canon, gene_name, hgnc_id, inheritance, disease_name, pmid, mim_id]
+                    newrow = [canon, gene_name, hgnc_id, inheritance, disease_name, pmid, d_id]
                     newrow += combo_id.split("|")
                     row_list.append(newrow)
     return row_list
@@ -229,7 +437,7 @@ def extract_isoform_alignments_ds(species):
         if len(seq_set[canon]) > 1:
             cluster_count += 1
 
-    log_file = "logs/%s_isoform_alignments.log" %(species)
+    log_file = "logs/%s_protein_isoform_alignments.log" %(species)
     with open(log_file, "w") as FW:
         FW.write("Started isoform alignments\n")
 
@@ -294,6 +502,7 @@ def extract_expression_disease_ds(species):
     row = ["uniprotkb_canonical_ac","significance","direction", "do_id", "do_name", "parent_doid", "parent_doname", "xref_key", "xref_id"]
     print "\"%s\"" % ("\",\"".join(row))
 
+    seen_row = {}
     f_list = work_book[sheet_name]["fields"]
     for row in work_book[sheet_name]["data"]:
         ac = row[f_list.index("uniprotkb_ac")]
@@ -317,14 +526,16 @@ def extract_expression_disease_ds(species):
             "protein_xref_bioxpress",
             canon.split("-")[0]
         ]
-        print "\"%s\"" % ("\",\"".join(newrow))
+        row_str = json.dumps(newrow)
+        if row_str not in seen_row:
+            seen_row[row_str] = True
+            print "\"%s\"" % ("\",\"".join(newrow))
 
 
 
 
 def extract_expression_normal_ds(species):
 
-    doid2name, uberonid2name = load_disease_info()
 
     canon2bgee = {}
     data_frame = {}
@@ -355,6 +566,7 @@ def extract_expression_normal_ds(species):
         "expression_level_gene_relative","expression_level_anatomical_relative",
         "call_quality","expression_rank_score","expression_score"
     ]
+    seen_row = {}
     newrow = ["uniprotkb_canonical_ac"] + selected_fields + ["xref_key", "xref_id"]
     print "\"%s\"" % ("\",\"".join(newrow))
     f_list = work_book[sheet_name]["fields"]
@@ -363,16 +575,16 @@ def extract_expression_normal_ds(species):
         if ac not in ac2canon:
             continue
         canon = ac2canon[ac]
-        bgee_id = canon2bgee[canon] if canon in canon2bgee else ""
-        #uberon_id = row[f_list.index("uberon_developmental_id")].split(":")[-1]
-        #uberon_name = row[f_list.index("uberon_anatomical_name")]
-        #uberon_name = uberonid2name[uberon_id] if uberon_id in uberonid2name else uberon_name
-        #row[f_list.index("uberon_anatomical_name")] = uberon_name
-        newrow = [canon]
-        for f in selected_fields:
-            newrow.append(row[f_list.index(f)])
-        newrow += ["protein_xref_bgee",bgee_id]
-        print "\"%s\"" % ("\",\"".join(newrow))
+        if canon in canon2bgee:
+            bgee_id = canon2bgee[canon]
+            newrow = [canon]
+            for f in selected_fields:
+                newrow.append(row[f_list.index(f)])
+            newrow += ["protein_xref_bgee",bgee_id]
+            row_str = json.dumps(newrow)
+            if row_str not in seen_row:
+                seen_row[row_str] = True
+                print "\"%s\"" % ("\",\"".join(newrow))
 
     return
 
@@ -380,35 +592,38 @@ def extract_expression_normal_ds(species):
 
 def load_ac2canon(species):
 
+    dict_one, dict_two = {}, {}
     data_frame = {}
     in_file = path_obj["unreviewed"] + "%s_protein_masterlist.csv" % (species)
     libgly.load_sheet(data_frame, in_file, ",")
     f_list = data_frame["fields"]
     for row in data_frame["data"]:
         canon = row[f_list.index("uniprotkb_canonical_ac")]
-        ac2canon[canon] = canon
+        dict_one[canon] = canon
         isoform_list = [row[f_list.index("reviewed_isoforms")],
                         row[f_list.index("unreviewed_isoforms")]]
         for isoform in isoform_list:
             ac = isoform.split("-")[0]
-            ac2canon[ac] = canon
-            ac2canon[isoform] = canon
+            dict_one[ac] = canon
+            dict_one[isoform] = canon
+            if isoform == canon:
+                dict_two[ac] = canon
 
+    return dict_one, dict_two
 
-    return ac2canon
 
 def load_canon_dict(species):
 
-    canon_dict = {}
+    tmp_dict = {}
     data_frame = {}
     in_file = path_obj["unreviewed"] + "%s_protein_masterlist.csv" % (species)
     libgly.load_sheet(data_frame, in_file, ",")
     f_list = data_frame["fields"]
     for row in data_frame["data"]:
         canon = row[f_list.index("uniprotkb_canonical_ac")]
-        canon_dict[canon] = True
+        tmp_dict[canon] = True
 
-    return canon_dict
+    return tmp_dict
 
 
 
@@ -438,10 +653,17 @@ def load_o_glyco_sites(species):
         if in_file.find("stat") != -1:
             continue
         source = in_file.split("_")[-1].split(".")[0]
-        data_frame = {}
-        libgly.load_sheet(data_frame, in_file, ",")
-        f_list = data_frame["fields"]
-        for row in data_frame["data"]:
+        FR = open(in_file, "r")
+        idx = 0
+        f_list = []
+        for line in FR:
+            idx += 1
+            row = line.strip().split("\",\"")
+            row[0] = row[0].replace("\"", "")
+            row[-1] = row[-1].replace("\"", "")
+            if idx == 1:
+                f_list = row
+                continue
             canon = row[f_list.index("uniprotkb_canonical_ac")]
             gly_type = row[f_list.index("glycosylation_type")]
             if row[f_list.index("glycosylation_site_uniprotkb")] == "":
@@ -450,7 +672,7 @@ def load_o_glyco_sites(species):
             combo_id = "%s %s" % (canon, pos)
             if gly_type.lower() in ["o_linked", "o-linked"]:
                 site_dict[combo_id] = True
-
+        FR.close()
 
     return site_dict
 
@@ -477,19 +699,6 @@ def get_n_site_stat(n_site_info):
     return site_stat_dict
 
 
-def load_disease_info ():
-
-    dict_one, dict_two = {}, {}
-    in_file = "generated/misc/doid2uberonid_mapping.csv"
-
-    data_frame = {}
-    libgly.load_sheet(data_frame, in_file, ",")
-    f_list = data_frame["fields"]
-    for row in data_frame["data"]:
-        dict_one[row[f_list.index("do_id")]] = row[f_list.index("do_name")]
-        dict_two[row[f_list.index("uberon_id")]] = row[f_list.index("uberon_name")]
-
-    return dict_one, dict_two
 
 
 def load_canon2genenames(species):
@@ -572,6 +781,7 @@ def extract_glycogenes_ds(species):
         "gene_group"]
     print "\"%s\"" % ("\",\"".join(newrow))
 
+    seen_row = {}
     FL = open("logs/%s_protein_glycogenes.log" % (species), "w")
     data_frame = {}
     libgly.load_sheet(data_frame, in_file, ",")
@@ -603,64 +813,159 @@ def extract_glycogenes_ds(species):
             if len(canon2genenames[canon]) > 1:
                 alt_gene_names = ";".join(canon2genenames[canon][1:])
             newrow = tmp_row + [alt_gene_names,rec_name,glycoenzyme_gene_id,gene_group]
+            row_str = json.dumps(newrow)
+            if row_str not in seen_row:
+                seen_row[row_str] = True
+                print "\"%s\"" % ("\",\"".join(newrow))
+            
+    FL.close()
+
+    return
+
+
+
+def load_tissueid2name_map():
+
+    in_file = "generated/misc/sample_mapping.csv"
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, ",")
+    f_list = data_frame["fields"]
+    tmp_dict = {}
+    for row in data_frame["data"]:
+        if row == []:
+            continue
+        term_id,term_name = row[f_list.index("term_id")],  row[f_list.index("term_name")]
+        sample_type = row[f_list.index("sample_type")]
+        tmp_dict[term_id] = term_name
+
+    return tmp_dict
+
+
+
+def extract_biomarkers_ds(species):
+
+    tissueid2name = load_tissueid2name_map()
+    doid2name = load_doid2name()
+
+    ac2synonyms = {}
+    file_list = ["unreviewed/%s_protein_altnames.csv" % (species), "unreviewed/%s_protein_submittednames.csv" % (species)]
+    for in_file in file_list:
+        data_frame = {}
+        libgly.load_sheet(data_frame, in_file, ",")
+        f_list = data_frame["fields"]
+        for row in data_frame["data"]:
+            ac = row[0].split("-")[0]
+            for i in range(1, len(row)):
+                name = row[i]
+                if ac not in ac2synonyms:
+                    ac2synonyms[ac] = []
+                if name not in ac2synonyms[ac]:
+                    ac2synonyms[ac].append(name)
+    
+
+    f_list_one = ["biomarker_id", "biomarker", "assessed_biomarker_entity", "assessed_biomarker_entity_id",
+        "assessed_entity_type", "exposure_agent", "exposure_agent_id",
+        "best_biomarker_role", "loinc_code", "evidence", "condition"]
+    newrow = ["uniprotkb_canonical_ac", "biomarker_canonical_id"]
+    newrow += f_list_one
+    newrow += ["component_level_tags", "top_level_tags",  "evidence_type", "component_synonyms"]
+    newrow += ["uberon_id","anatomical_entity", "do_id","do_name", "do_desc", "do_syn"]
+    newrow += ["xref_key","xref_id","src_xref_key", "src_xref_id"]
+    print "\"%s\"" % ("\",\"".join(newrow))
+
+
+    log_file = "logs/%s_protein_biomarkers.log" % (species)
+    FL = open(log_file, "w")
+
+    #in_file = path_obj["downloads"] + "/biomarkerdb/current/allbiomarkers.tsv"
+    in_file = path_obj["downloads"] + "/biomarkerdb/current/oncomx.tsv"
+
+
+
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, "\t")
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        flag_list = []
+        biomarker_id = row[f_list.index("biomarker_id")]
+        biomarker_canonical_id = row[f_list.index("biomarker_id")].split("-")[0]
+        entity_id = row[f_list.index("assessed_biomarker_entity_id")]
+        evidence = row[f_list.index("evidence")]
+        tag = row[f_list.index("tag")]
+        evidence_source = row[f_list.index("evidence_source")]
+        do_id = row[f_list.index("condition_id")].lower().replace("doid:", "")
+        uberon_id = row[f_list.index("specimen_id")].lower().replace("uberon:", "")
+        if entity_id.find("UPKB:") == -1:
+            flag_list.append("no-UPKB-component")
+        ac = entity_id.split(":")[1]
+        if ac not in ac2canon:
+            flag_list.append("no-ac2canon-map")
+        k =  evidence_source.split(":")[0].lower()
+        if k not in ["pubmed", "doi"]:
+            flag_list.append("no-pubmed/doi-xref")
+
+        if flag_list != []:
+            FL.write("\"%s\"\n" % ("\",\"".join(row + [";".join(flag_list)])) )
+            continue
+
+
+        synonyms = ac2synonyms[ac] if ac in ac2synonyms else []
+        component_synonyms = "|".join(synonyms)
+        canon = ac2canon[ac]
+        xref_key = "protein_xref_" + k
+        xref_id = evidence_source.split(":")[1]
+        tmp_row = [canon, biomarker_canonical_id]
+        tag_list_one, tag_list_two = [], []
+        for f in f_list_one:
+            val = "" if f == "loinc_code" and val == "NA" else row[f_list.index(f)]
+            tmp_row.append(val)
+        for t in tag.split(";"):
+            if t in ["condition","best_biomarker_role"]:
+                tag_list_two.append(t)
+            else:
+                tag_list_one.append(t)
+        n_one = len(tag_list_one)
+        n_two = len(tag_list_two)
+        evidence_type = ""
+        if n_one > 0 and n_two > 0:
+            evidence_type = "both_levels"
+        elif n_one > 0:
+            evidence_type = "component_level"
+        elif n_two > 0:
+            evidence_type = "top_level"
+        tmp_row.append("; ".join(tag_list_one))
+        tmp_row.append("; ".join(tag_list_two))
+        tmp_row.append(evidence_type)
+        tmp_row.append(component_synonyms)
+
+        uberon_name, do_name  = "", ""
+        if do_id in doid2name["do"]:
+            do_name = doid2name["do"][do_id]["name"]
+       
+        do_desc = doid2name["do"][do_id]["description"] if do_id in doid2name["do"] else ""
+        do_syn_list = doid2name["do"][do_id]["synonyms"] if do_id in doid2name["do"] else [] 
+        do_syn = "|".join(do_syn_list)
+        u_id = "UBERON:" + uberon_id 
+        if u_id in tissueid2name:
+            uberon_name = tissueid2name[u_id]
+
+        tmp_row += [uberon_id,uberon_name,do_id,do_name, do_desc, do_syn]
+        #src_xref_key = "protein_xref_glygen_ds"
+        #ds = "%s_protein_biomarkers" % (species)
+        #src_xref_id = ds2bco[ds] if ds in ds2bco else ""
+        src_xref_key = "protein_xref_biomarkerkb"
+        src_xref_id = biomarker_id 
+        newrow = tmp_row + [xref_key, xref_id, src_xref_key, src_xref_id]
+        if xref_id != "https":
             print "\"%s\"" % ("\",\"".join(newrow))
 
     FL.close()
 
     return
 
-def extract_biomarkers_cancer_ds(species):
-
-    doid2name, uberonid2name = load_disease_info()
-    f_list_one = ["biomarker_id", "assessed_biomarker_entity", "biomarker", 
-        "best_biomarker_type","loinc_code", "notes"
-    ]
-    newrow = ["uniprotkb_canonical_ac"] + f_list_one
-    newrow += ["anatomical_entity","uberon_id","do_id","do_name",
-        "xref_key","xref_id","src_xref_key", "src_xref_id"]
-    print "\"%s\"" % ("\",\"".join(newrow))
-
-    in_file = path_obj["downloads"] + "/biomarkerdb/current/glygen_%s_protein_biomarkers_cancer.csv" % (species)
-    data_frame = {}
-    libgly.load_sheet(data_frame, in_file, ",")
-    f_list = data_frame["fields"]
-    for row in data_frame["data"]:
-        ac = row[f_list.index("main_xref")].split(":")[-1]
-        if ac not in ac2canon:
-            continue
-        pmid = row[f_list.index("pmid")].strip()
-        if pmid == "":
-            continue
-        biomarker_id = row[f_list.index("biomarker_id")].strip()
-        specimen_type = row[f_list.index("specimen_type")].strip()
-        disease_name = row[f_list.index("disease_name")].strip()
-        uberon_id = specimen_type.split("(")[1].split(")")[0].split(":")[-1]
-        do_id = disease_name.split("(")[1].split(")")[0].split(":")[-1] 
-        canon = ac2canon[ac]
-        tmp_row = [canon]
-        for f in f_list_one:
-            tmp_row.append(row[f_list.index(f)])
-        uberon_name, do_name  = "", ""
-        if do_id in doid2name:
-            do_name = doid2name[do_id]
-        if uberon_id in uberonid2name:
-            uberon_name = uberonid2name[uberon_id]
-
-        tmp_row += [do_name, uberon_id,do_id,do_name]
-        src_xref_key, src_xref_id = "protein_xref_biomarkerdb", biomarker_id
-        xref_key, xref_id = "protein_xref_pubmed", pmid.split(":")[-1]
-        newrow = tmp_row + [xref_key, xref_id, src_xref_key, src_xref_id]
-        print "\"%s\"" % ("\",\"".join(newrow))
-        newrow = tmp_row + [src_xref_key, src_xref_id, src_xref_key, src_xref_id]
-        print "\"%s\"" % ("\",\"".join(newrow))
-
-
-    return
-
 
 def extract_mutation_germline_ds(species):
 
-    canon_dict = load_canon_dict(species)
     fasta_file = "unreviewed/%s_protein_canonicalsequences.fasta" % (species)
     seq_hash = load_fasta_sequences(fasta_file)
    
@@ -699,6 +1004,7 @@ def extract_mutation_germline_ds(species):
     x = commands.getoutput(cmd)
     libgly.log_file_usage(x, "", "append")
 
+    seen_row = {}
     import sys
     reload(sys)
     sys.setdefaultencoding('utf-8')
@@ -740,7 +1046,7 @@ def extract_mutation_germline_ds(species):
                 ref_aa = row[f_list.index("ref_aa")]
                 alt_aa = row[f_list.index("alt_aa")]
                 aa_pos = begin_aa_pos
-
+                
                 #consider only point mutations
                 if begin_aa_pos != end_aa_pos:
                     continue
@@ -807,13 +1113,19 @@ def extract_mutation_germline_ds(species):
                         mim_id, do_id =  map_row[0], map_row[1]
                         row_two = [xref_key, xref_id, mim_id,do_id]
                         row_two += [filter_flags,glyco_annotation]
-                        print "\"%s\"" % ("\",\"".join(row_one + row_two))
+                        row_str = json.dumps(row_one + row_two)
+                        if row_str not in seen_row:
+                            seen_row[row_str] = True
+                            print "\"%s\"" % ("\",\"".join(row_one + row_two))
                         for dsrc in data_source_list:
                             xref_key = "protein_xref_" + dsrc.lower()
                             xref_id = dbsnp_id
                             row_two = [xref_key, xref_id, mim_id,do_id]
                             row_two += [filter_flags,glyco_annotation]
-                            print "\"%s\"" % ("\",\"".join(row_one + row_two))
+                            row_str = json.dumps(row_one + row_two)
+                            if row_str not in seen_row:
+                                seen_row[row_str] = True
+                                print "\"%s\"" % ("\",\"".join(row_one + row_two))
                         for evdn in evdn_list:
                             if evdn.find("pubmed") == -1:
                                 continue
@@ -821,19 +1133,28 @@ def extract_mutation_germline_ds(species):
                             xref_id = evdn.split(":")[1]
                             row_two = [xref_key, xref_id, mim_id,do_id]
                             row_two += [filter_flags,glyco_annotation]
-                            print "\"%s\"" % ("\",\"".join(row_one + row_two))
+                            row_str = json.dumps(row_one + row_two)
+                            if row_str not in seen_row:
+                                seen_row[row_str] = True
+                                print "\"%s\"" % ("\",\"".join(row_one + row_two))
                 elif filter_flags != "":
                     xref_key, xref_id = "protein_xref_dbsnp", dbsnp_id
                     mim_id, do_id = "", ""
                     row_two = [xref_key, xref_id, mim_id,do_id]
                     row_two += [filter_flags,glyco_annotation]
-                    print "\"%s\"" % ("\",\"".join(row_one + row_two))
+                    row_str = json.dumps(row_one + row_two)
+                    if row_str not in seen_row:
+                        seen_row[row_str] = True
+                        print "\"%s\"" % ("\",\"".join(row_one + row_two))
                     for dsrc in data_source_list:
                         xref_key = "protein_xref_" + dsrc.lower()
                         xref_id = dbsnp_id
                         row_two = [xref_key, xref_id, mim_id,do_id] 
                         row_two += [filter_flags,glyco_annotation]
-                        print "\"%s\"" % ("\",\"".join(row_one + row_two))
+                        row_str = json.dumps(row_one + row_two)
+                        if row_str not in seen_row:
+                            seen_row[row_str] = True
+                            print "\"%s\"" % ("\",\"".join(row_one + row_two))
                     for evdn in evdn_list:
                         if evdn.find("pubmed") == -1:
                             continue
@@ -841,12 +1162,14 @@ def extract_mutation_germline_ds(species):
                         xref_id = evdn.split(":")[1]
                         row_two = [xref_key, xref_id, mim_id,do_id]
                         row_two += [filter_flags,glyco_annotation]
-                        print "\"%s\"" % ("\",\"".join(row_one + row_two))
+                        row_str = json.dumps(row_one + row_two)
+                        if row_str not in seen_row:
+                            seen_row[row_str] = True
+                            print "\"%s\"" % ("\",\"".join(row_one + row_two))
 
     return
 
-def extract_mutation_literature(species):
-
+def extract_mutation_literature_ds(species):
 
        
     seq_hash = {}
@@ -868,16 +1191,19 @@ def extract_mutation_literature(species):
         aa_dict[one.upper()] = one.upper()
 
     data_frame = {}
-    in_file = path_obj["downloads"] +  "biomuta/current/human_cancer_mutation_literature.csv"
+    #in_file = path_obj["downloads"] +  "biomuta/current/human_cancer_mutation_literature.csv"
+    in_file = "compiled/human_cancer_mutation_literature.csv"
+    
     libgly.load_sheet(data_frame, in_file, ",")
     f_list = data_frame["fields"]
     newrow = ["uniprotkb_canonical_ac"]
     for f in f_list:
-        if f not in ["uniprotkb_ac", "gene_symbol", "mutation_mention"]:
+        if f not in ["pmid","uniprotkb_ac", "gene_symbol", "mutation_mention"]:
             newrow.append(f)
-    newrow += ["start_pos", "start_pos", "ref_aa", "alt_aa"]
+    newrow += ["start_pos", "start_pos", "ref_aa", "alt_aa", "xref_key","xref_id"]
     print "\"%s\"" % ("\",\"".join(newrow))
 
+    seen_row = {}
     for row in data_frame["data"]:
         ac = row[f_list.index("uniprotkb_ac")]
         if ac not in ac2canon:
@@ -885,8 +1211,10 @@ def extract_mutation_literature(species):
         canon = ac2canon[ac]
         newrow = [canon]
         for f in f_list:
-            if f not in ["uniprotkb_ac", "gene_symbol", "mutation_mention"]:
+            if f not in ["pmid", "uniprotkb_ac", "gene_symbol", "mutation_mention"]:
                 newrow.append(row[f_list.index(f)])
+        xref_key, xref_id = "protein_xref_pubmed", row[f_list.index("pmid")]
+
         mutation_mention = row[f_list.index("mutation_mention")]
         parts = re.split(r'[0-9]+', mutation_mention)
         pos = mutation_mention.replace(parts[0], "")
@@ -903,8 +1231,11 @@ def extract_mutation_literature(species):
             continue
         if seq_hash[canon][start_pos-1] != ref_aa:
             continue
-        newrow += [str(start_pos), str(end_pos), ref_aa, alt_aa]
-        print "\"%s\"" % ("\",\"".join(newrow))
+        newrow += [str(start_pos), str(end_pos), ref_aa, alt_aa, xref_key, xref_id]
+        row_str = json.dumps(newrow)
+        if row_str not in seen_row:
+            seen_row[row_str] = True
+            print "\"%s\"" % ("\",\"".join(newrow))
     return
 
 
@@ -920,13 +1251,12 @@ def load_fasta_sequences(fasta_file):
 
 def extract_mutation_somatic_ds(species):
 
-    canon_dict = load_canon_dict(species)
     fasta_file = "unreviewed/%s_protein_canonicalsequences.fasta" % (species)
     seq_hash = load_fasta_sequences(fasta_file)
 
     n_site_info = get_glycosylation_sites(species) 
     is_o_site = load_o_glyco_sites(species)
-    
+   
     site_stat_dict = get_n_site_stat(n_site_info)
 
     is_glycoprotein = {}
@@ -937,7 +1267,7 @@ def extract_mutation_somatic_ds(species):
 
 
 
-
+    seen_row = {}
     data_frame = {}
     in_file = "unreviewed/protein_disease_idmap.csv"
     libgly.load_sheet(data_frame, in_file, ",")
@@ -952,10 +1282,13 @@ def extract_mutation_somatic_ds(species):
                 mimid2doid[xref_id] = []
             mimid2doid[xref_id].append(do_id)
     
+
     clinvar_ann = {}
     tax_name = species_obj[species]["long_name"].lower().replace(" ", "-")
     in_file = path_obj["downloads"] + "/ebi/current/dbSNP-%s.tsv" % (tax_name)
-            
+    
+
+ 
     cmd = "readlink -f " + in_file
     x = commands.getoutput(cmd)
     libgly.log_file_usage(x, "", "append")
@@ -988,8 +1321,6 @@ def extract_mutation_somatic_ds(species):
                     continue
                 if row[f_list.index("somatic_status")] == "0":
                     continue
-                
-                
                 ac = row[f_list.index("uniprotkb_accession")]
                 if ac.find("-") != -1 and ac not in canon_dict:
                     continue
@@ -1022,9 +1353,7 @@ def extract_mutation_somatic_ds(species):
                     if f == "frequency" and f_val.find("E-") != -1:
                         f_val = str(round(float(f_val), 6))
                     row_one.append(f_val)
-
                 dbsnp_id = row[f_list.index("dbsnp_id")]
-
                 e_list = get_mutation_effect_list(seq_hash[canon], aa_pos,ref_aa, alt_aa)
                 filter_flag_list = []
                 for o in e_list:
@@ -1038,7 +1367,6 @@ def extract_mutation_somatic_ds(species):
                     if eff == "n-glyco-sequon-gain" and canon not in is_glycoprotein:
                         continue
                     filter_flag_list.append("%s (%s->%s)" % (eff,ref_m,alt_m))
-
                 if filter_flag_list == []:
                     continue
                 filter_flags = ""
@@ -1061,13 +1389,19 @@ def extract_mutation_somatic_ds(species):
                                 xref_key, xref_id = "protein_xref_dbsnp", dbsnp_id
                                 row_two = [xref_key, xref_id, mim_id,do_id]
                                 row_two += [filter_flags,glyco_annotation]
-                                print "\"%s\"" % ("\",\"".join(row_one + row_two))
+                                row_str = json.dumps(row_one + row_two)
+                                if row_str not in seen_row:
+                                    seen_row[row_str] = True
+                                    print "\"%s\"" % ("\",\"".join(row_one + row_two))
                                 for dsrc in data_source_list:
                                     xref_key = "protein_xref_" + dsrc.lower()
                                     xref_id = dbsnp_id
                                     row_two = [xref_key, xref_id, mim_id,do_id]
                                     row_two += [filter_flags,glyco_annotation]
-                                    print "\"%s\"" % ("\",\"".join(row_one + row_two))
+                                    row_str = json.dumps(row_one + row_two)
+                                    if row_str not in seen_row:
+                                        seen_row[row_str] = True
+                                        print "\"%s\"" % ("\",\"".join(row_one + row_two))
                                 for evdn in evdn_list:
                                     if evdn.find("pubmed") == -1:
                                         continue
@@ -1075,19 +1409,28 @@ def extract_mutation_somatic_ds(species):
                                     xref_id = evdn.split(":")[1]
                                     row_two = [xref_key, xref_id, mim_id,do_id]
                                     row_two += [filter_flags,glyco_annotation]
-                                    print "\"%s\"" % ("\",\"".join(row_one + row_two))
+                                    row_str = json.dumps(row_one + row_two)
+                                    if row_str not in seen_row:
+                                        seen_row[row_str] = True
+                                        print "\"%s\"" % ("\",\"".join(row_one + row_two))
                 elif filter_flags != "":
                     xref_key, xref_id = "protein_xref_dbsnp", dbsnp_id
                     mim_id, do_id = "", ""
                     row_two = [xref_key, xref_id, mim_id,do_id]
                     row_two += [filter_flags,glyco_annotation]
-                    print "\"%s\"" % ("\",\"".join(row_one + row_two))
+                    row_str = json.dumps(row_one + row_two)
+                    if row_str not in seen_row:
+                        seen_row[row_str] = True 
+                        print "\"%s\"" % ("\",\"".join(row_one + row_two))
                     for dsrc in data_source_list:
                         xref_key = "protein_xref_" + dsrc.lower()
                         xref_id = dbsnp_id
                         row_two = [xref_key, xref_id, mim_id,do_id]
                         row_two += [filter_flags,glyco_annotation]
-                        print "\"%s\"" % ("\",\"".join(row_one + row_two))
+                        row_str = json.dumps(row_one + row_two)
+                        if row_str not in seen_row:
+                            seen_row[row_str] = True
+                            print "\"%s\"" % ("\",\"".join(row_one + row_two))
                     for evdn in evdn_list:
                         if evdn.find("pubmed") == -1:
                             continue
@@ -1095,7 +1438,10 @@ def extract_mutation_somatic_ds(species):
                         xref_id = evdn.split(":")[1]
                         row_two = [xref_key, xref_id, mim_id,do_id]
                         row_two += [filter_flags,glyco_annotation]
-                        print "\"%s\"" % ("\",\"".join(row_one + row_two))
+                        row_str = json.dumps(row_one + row_two)
+                        if row_str not in seen_row:
+                            seen_row[row_str] = True
+                            print "\"%s\"" % ("\",\"".join(row_one + row_two))
 
 
     return
@@ -1103,20 +1449,27 @@ def extract_mutation_somatic_ds(species):
 
 def extract_mutation_cancer_ds(species):
 
+    
     fasta_file = "unreviewed/%s_protein_canonicalsequences.fasta" % (species)
     seq_hash = load_fasta_sequences(fasta_file)
+   
+    dbsnp_file = path_obj["downloads"] + "/ebi/current/toy.tsv"
+    biomuta_file = path_obj["downloads"] + "/biomuta/current/toy.csv"
+    log_file = "logs/%s_protein_mutation_cancer.log" % (species)
+    clinical_file = path_obj["downloads"] + "/biomuta/current/clinical_information.csv"
+    n_site_info, is_o_site, site_stat_dict, is_glycoprotein = {}, {}, {}, {}
+    if DEBUG == False:
+        tax_name = species_obj[species]["long_name"].lower().replace(" ", "-")
+        dbsnp_file = path_obj["downloads"] + "/ebi/current/dbSNP-%s.tsv" % (tax_name)
+        biomuta_file = path_obj["downloads"] + "/biomuta/current/biomuta.csv"
+        n_site_info = get_glycosylation_sites(species)
 
-    n_site_info = get_glycosylation_sites(species)
-    is_o_site = load_o_glyco_sites(species)
-    site_stat_dict = get_n_site_stat(n_site_info)
-
-
-    
-    is_glycoprotein = {}
-    for combo_id in n_site_info.keys() + is_o_site.keys():
-        canon = combo_id.split(" ")[0]
-        is_glycoprotein[canon] = True
-
+        is_o_site = load_o_glyco_sites(species)
+        site_stat_dict = get_n_site_stat(n_site_info)
+        is_glycoprotein = {}
+        for combo_id in n_site_info.keys() + is_o_site.keys():
+            canon = combo_id.split(" ")[0]
+            is_glycoprotein[canon] = True
 
     seen_canon = {}
     data_frame = {}
@@ -1126,7 +1479,6 @@ def extract_mutation_cancer_ds(species):
     for row in data_frame["data"]:
         canon = row[f_list.index("uniprotkb_canonical_ac")]
         seen_canon[canon] = True
-
 
     in_file = "unreviewed/protein_disease_idmap.csv"
     libgly.load_sheet(data_frame, in_file, ",")
@@ -1153,33 +1505,52 @@ def extract_mutation_cancer_ds(species):
         alt_aa = row[f_list.index("alt_aa")]
         aa_pos = row[f_list.index("start_pos")]
         do_id = row[f_list.index("doid")]
-        pmid = row[f_list.index("pmid")]
-        combo_id = "%s %s %s %s" % (canon, aa_pos, ref_aa, alt_aa)
-        if combo_id not in lit_ann:
-            lit_ann[combo_id] = []
-            lit_list[combo_id] = []
+        xref_key = row[f_list.index("xref_key")]
+        xref_id = row[f_list.index("xref_id")]
+        if xref_key == "protein_xref_pubmed":
+            pmid = xref_id
+            combo_id = "%s %s %s %s" % (canon, aa_pos, ref_aa, alt_aa)
+            if combo_id not in lit_ann:
+                lit_ann[combo_id] = []
+                lit_list[combo_id] = []
+            lit_ann[combo_id].append(do_id)
+            if pmid.strip() != "" and pmid not in lit_list[combo_id]:
+                lit_list[combo_id].append(pmid)
 
-        lit_ann[combo_id].append(do_id)
-        if pmid.strip() != "" and pmid not in lit_list[combo_id]:
-            lit_list[combo_id].append(pmid)
 
+    clinical_info = {}
+    cmd = "readlink -f " + clinical_file
+    x = commands.getoutput(cmd)
+    libgly.log_file_usage(x, "", "append")
+    #These info come from TCGA. The file that needs to be parsed is glygen/downloads/biomuta/v-5.0/tcga/clinical_information.csv. Target the fields submitter_id for patient and project_id for cancer. The submitter id is present in compiled/biomuta_v5.csv as sample_name to map the info.
+    libgly.load_sheet(data_frame, clinical_file, ",")
+    f_list = data_frame["fields"]
+    studyid2tested = {}
+    patientid2studyid = {}
+    for row in data_frame["data"]:
+        patient_id = row[f_list.index("submitter_id")]
+        study_id = row[f_list.index("proj__project_id")]
+        if study_id not in studyid2tested:
+            studyid2tested[study_id] = 0
+        studyid2tested[study_id] += 1
+        patientid2studyid[patient_id] = study_id
+    
 
+    
+    
     clinvar_ann = {}
-    tax_name = species_obj[species]["long_name"].lower().replace(" ", "-")
-    in_file = path_obj["downloads"] + "/ebi/current/dbSNP-%s.tsv" % (tax_name)
-    #in_file = path_obj["downloads"] + "/ebi/current/toydbSNP-homo-sapiens.tsv"
-    dbsnpid_list = {}
-  
-    cmd = "readlink -f " + in_file
+    dbsnpid_dict = {}
+    cmd = "readlink -f " + dbsnp_file
     x = commands.getoutput(cmd)
     libgly.log_file_usage(x, "", "append")
 
 
+    seen_row = {}
     import sys
     reload(sys)
     sys.setdefaultencoding('utf-8')
     import io
-    with io.open(in_file, "r", encoding="utf-8",errors="ignore") as FR:
+    with io.open(dbsnp_file, "r", encoding="utf-8",errors="ignore") as FR:
         lcount = 0
         for line in FR:
             lcount += 1
@@ -1199,12 +1570,12 @@ def extract_mutation_cancer_ds(species):
                 mim_id_list = row[f_list.index("disease_xrefs")].strip().split(",")
                 dbsnp_id = row[f_list.index("dbsnp_id")]
                 combo_id = "%s %s %s %s" % (canon, aa_pos, ref_aa, alt_aa)
-                if dbsnp_id.strip() != "":
-                    if combo_id not in dbsnpid_list:
-                        dbsnpid_list[combo_id] = []
-                    if dbsnp_id not in dbsnpid_list[combo_id]:
-                        dbsnpid_list[combo_id].append(dbsnp_id)
                 
+                #we get dbSNP rs ID from Biomuta file now
+                #if dbsnp_id.strip() != "":
+                #    if combo_id not in dbsnpid_dict:
+                #        dbsnpid_dict[combo_id] = {}
+                #    dbsnpid_dict[combo_id][dbsnp_id] = True
                 if mim_id_list != [""]:
                     for idx in mim_id_list:
                         mim_id = idx.split(":")[1].strip()
@@ -1214,7 +1585,11 @@ def extract_mutation_cancer_ds(species):
                             clinvar_ann[combo_id] += mimid2doid[mim_id]
 
 
-    row = ["uniprotkb_canonical_ac","aa_pos","ref_aa","alt_aa","chr_id","chr_pos",
+
+    FL = open(log_file, "w")
+
+    row = ["uniprotkb_canonical_ac","aa_pos","ref_aa","alt_aa","chr_id","chr_start_pos",
+            "chr_end_pos",
             "ref_nt","alt_nt", "patients_positive", "patients_tested", "mut_freq",
             "data_source","do_id","do_name","xref_key", "xref_id", "filter_flags", 
             "glyco_annotation", "mim_id", "somatic_status","minor_allelic_frequency"
@@ -1222,10 +1597,7 @@ def extract_mutation_cancer_ds(species):
     print "\"%s\"" % ("\",\"".join(row))
 
     anchor_fields = ["uniprotkb_canonical_ac","aa_pos","ref_aa","alt_aa","do_id","source"]
-    in_file = "downloads/biomuta/current/biomuta.csv"
-    #in_file = "downloads/biomuta/current/toybiomuta.csv"
-    
-    cmd = "readlink -f " + in_file
+    cmd = "readlink -f " + biomuta_file
     x = commands.getoutput(cmd)
     libgly.log_file_usage(x, "", "append")
 
@@ -1233,29 +1605,85 @@ def extract_mutation_cancer_ds(species):
     cancer_count_dict = {}
     source_dict = {}
     data_grid = {}
-    with open(in_file, "r") as FR:
-        csv_grid = csv.reader(FR, delimiter=",", quotechar='\"')
+    mut2patient = {}
+    
+    with io.open(biomuta_file, "r", encoding="utf-8",errors="ignore") as FR:
         row_count = 0
-        for row in csv_grid:
+        for line in FR:
+            row = line.strip().split("\",\"")
+            row[0] = row[0].replace("\"", "")
+            row[-1] = row[-1].replace("\"", "")
+    #with open(biomuta_file, "r") as FR:
+    #    csv_grid = csv.reader(FR, delimiter=",", quotechar='\"')
+    #    row_count = 0
+    #    for row in csv_grid:
             row_count += 1
             if row_count == 1:
                 f_list = row
+                newrow = row + ["flag_list"]
+                FL.write("\"%s\"\n" % ("\",\"".join(newrow)))
                 continue
-            canon = row[f_list.index("uniprot_canonical_ac")]
+            flag_list = []
+            sample_name = row[f_list.index("sample_name")]
+            chr_id = row[f_list.index("chr_id")]
+            start_pos = row[f_list.index("start_pos")]
+            end_pos = row[f_list.index("end_pos")]
+            canon = row[f_list.index("uniprotkb_canonical_ac")]
             aa_pos = row[f_list.index("aa_pos")]
+            ref_nt = row[f_list.index("ref_nt")]
+            alt_nt = row[f_list.index("alt_nt")]
             ref_aa = row[f_list.index("ref_aa")]
             alt_aa = row[f_list.index("alt_aa")]
-            do_id = row[f_list.index("do_id")]
             do_name = row[f_list.index("do_name")]
             source = row[f_list.index("source")]
+            if source == "cosmic":  
+                continue
+
+            if row[f_list.index("dbsnp_id")].strip() != "":
+                dbsnp_id_list = row[f_list.index("dbsnp_id")].split("|")
+                for dbsnp_id in dbsnp_id_list:
+                    if dbsnp_id[:2] == "rs":
+                        combo_id = "%s %s %s %s" % (canon, aa_pos, ref_aa, alt_aa)
+                        if combo_id not in dbsnpid_dict:
+                            dbsnpid_dict[combo_id] = {}
+                        dbsnpid_dict[combo_id][dbsnp_id] = True
+
+
+            
+            
+            #do_id = row[f_list.index("do_id")]
+            do_id = ""
+            if do_name.find("DOID:") != -1:
+                do_id = do_name.split("/")[0].split(":")[1].strip()
+
+            if do_id == "":
+                flag_list.append("no-disease-info")
+            if start_pos.isdigit() == False:
+                flag_list.append("start_pos-bad-value")
+            if end_pos.isdigit() == False:
+                flag_list.append("end_pos-bad-value")
+
             if canon not in seen_canon:
-                continue
+                flag_list.append("canon-not-found")
+            elif canon not in seq_hash:
+                flag_list.append("no-canon-seq")
+            else:
+                if aa_pos.isdigit() == False:
+                    flag_list.append("aa_pos-bad-value")
+                else:
+                    if int(aa_pos) < 1 or int(aa_pos) > len(seq_hash[canon]):
+                        flag_list.append("aa_pos > canon_seq_len")
+                    elif ref_aa != seq_hash[canon][int(aa_pos)-1]:
+                        flag_list.append("ref_aa-mismatch")
+
+            if ref_nt == alt_nt:
+                flag_list.append("no-nt-change")
             if ref_aa == alt_aa:
-                continue
-            if int(aa_pos) > len(seq_hash[canon]):
-                continue
-            #check amino acid
-            if ref_aa != seq_hash[canon][int(aa_pos)-1]:
+                flag_list.append("no-aa-change")
+
+            if flag_list != []:
+                newrow = row + [";".join(flag_list)]
+                FL.write("\"%s\"\n" % ("\",\"".join(newrow)))
                 continue
 
             combo_id = "%s %s %s %s" % (canon, aa_pos, ref_aa, alt_aa)
@@ -1271,16 +1699,19 @@ def extract_mutation_cancer_ds(species):
                 source_dict[src_combo_id].append(source)
             
             new_combo_id = "%s %s %s %s %s %s" % (canon,aa_pos,ref_aa,alt_aa,do_id,source)
+            
             if new_combo_id not in data_grid:
                 data_grid[new_combo_id] = {}
             for f in f_list:
                 if f not in anchor_fields:
-                    if f in ["patients_tested", "patients_positive"]:
-                        if f not in data_grid[new_combo_id]:
-                            data_grid[new_combo_id][f] = 0
-                        data_grid[new_combo_id][f] += int(row[f_list.index(f)])
-                    else:
-                        data_grid[new_combo_id][f] = row[f_list.index(f)]
+                    data_grid[new_combo_id][f] = row[f_list.index(f)]
+            if new_combo_id not in mut2patient:
+                mut2patient[new_combo_id] = {}
+            mut2patient[new_combo_id][sample_name] = True
+
+
+    FL.close()
+
 
     freq_dist = {}
     #cutoff_one = 0.01
@@ -1290,10 +1721,16 @@ def extract_mutation_cancer_ds(species):
     for new_combo_id in data_grid:
         obj = data_grid[new_combo_id]
         canon,aa_pos, ref_aa, alt_aa,do_id,source = new_combo_id.split(" ")
-        patients_tested = int(obj["patients_tested"])
-        patients_positive = int(obj["patients_positive"])
-        mut_freq = round(100.0*float(patients_positive)/float(patients_tested), 1)
         do_name = obj["do_name"]
+        patient_id = data_grid[new_combo_id]["sample_name"]
+        patients_tested, patients_positive, mut_freq = 0, 0, 0.0
+        if patient_id in patientid2studyid:
+            study_id = patientid2studyid[patient_id]
+            patient_list = list(mut2patient[new_combo_id].keys())
+            patients_tested = studyid2tested[study_id] 
+            patients_positive = len(patient_list)
+            mut_freq = round(100.0*float(patients_positive)/float(patients_tested), 1)
+        
         if ref_aa == alt_aa:
             continue
         combo_id = "%s %s %s %s" % (canon, aa_pos, ref_aa, alt_aa)
@@ -1347,9 +1784,10 @@ def extract_mutation_cancer_ds(species):
 
         filter_flags = "Somatic mutation passed %s out of %s filters: " % (n_filters_passed, 6)
         filter_flags += "; ".join(filter_flag_list + extra_filter_flag_list) + "."
-        if combo_id in dbsnpid_list:
-            if dbsnpid_list[combo_id] != []:
-                filter_flags += " In dbSNP: %s." % ("; ".join(dbsnpid_list[combo_id]))
+        if combo_id in dbsnpid_dict:
+            rs_list = list(dbsnpid_dict[combo_id].keys())
+            if rs_list != []:
+                filter_flags += " In dbSNP: %s." % ("; ".join(rs_list))
 
         if canon not in seen_canon:
             continue
@@ -1368,7 +1806,8 @@ def extract_mutation_cancer_ds(species):
             ref_aa,
             alt_aa,
             obj["chr_id"],
-            obj["chr_pos"],
+            obj["start_pos"],
+            obj["end_pos"],
             obj["ref_nt"],
             obj["alt_nt"],
             str(patients_positive),
@@ -1385,8 +1824,11 @@ def extract_mutation_cancer_ds(species):
             "1",
             ""
         ]
-        print "\"%s\"" % ("\",\"".join(newrow))
-
+        row_str = json.dumps(newrow)
+        if row_str not in seen_row:
+            seen_row[row_str] = True
+            print "\"%s\"" % ("\",\"".join(newrow))
+        
 
 
     return
@@ -1414,6 +1856,7 @@ def run_stretcher(seq_hash, seqid_one, seqid_two):
 def extract_matrixdb_ds(species):
 
 
+    glycan_dict = load_glycan_masterdict() 
 
     in_file = "generated/misc/matrix_db_label.csv"
     matrixdbid2label = {}
@@ -1434,7 +1877,11 @@ def extract_matrixdb_ds(species):
         glytoucan_ac = row[f_list.index("GlyTouCanAccession")]
         matrixdb_id = "matrixdb:" + row[f_list.index("MatrixDBAccession")]
         matrixdbid2glytoucan[matrixdb_id] = glytoucan_ac
-    
+
+
+    log_file = path_obj["logs"] +  "%s_protein_matrixdb.log" % (species)
+    FL = open(log_file, "w")
+       
 
     newrow = ["uniprotkb_canonical_ac", "matrix_db_id", "matrix_db_label", "chebi_id", 
                 "gag_interactor_biological_role", "protein_interactor_biological_role",
@@ -1442,12 +1889,14 @@ def extract_matrixdb_ds(species):
                 "xref_key","xref_id", "src_xref_key","src_xref_id"] 
     print "\"%s\"" % ("\",\"".join(newrow))
 
+    seen_row = {}
     data_frame = {}
-    in_file = path_obj["downloads"] +  "/matrixdb/current/matrixdb_CORE.csv"
-    libgly.load_sheet(data_frame, in_file, ",")
+    in_file = path_obj["downloads"] +  "/matrixdb/current/matrixdb_CORE.tab"
+    libgly.load_sheet(data_frame, in_file, "\t")
     f_list = data_frame["fields"]
+
     for row in data_frame["data"]:
-        ids_a = row[f_list.index("#ID(s) interactor A")].replace("\"", "")
+        ids_a = row[f_list.index("ID(s) interactor A")].replace("\"", "")
         ids_b = row[f_list.index("ID(s) interactor B")].replace("\"", "")
         alt_ids_a = row[f_list.index("Alt. ID(s) interactor A")].replace("\"", "")
         alt_ids_b = row[f_list.index("Alt. ID(s) interactor B")].replace("\"", "")
@@ -1474,8 +1923,16 @@ def extract_matrixdb_ds(species):
                     matrixdb_id = matrixdb_id.replace("matrixdb:", "")
                     for pair in [["glycan_xref_matrixdb", matrixdb_id],["protein_xref_pubmed",pmid]]:
 
+                        if pair[0] == "protein_xref_pubmed" and pair[1].isdigit() == False:
+                            continue
                         newrow = [canon,matrixdb_id,matrix_db_label, chebi_id,gag_role,protein_role,ev,saccharide,interaction_type,source,source_id,pair[0], pair[1],"glycan_xref_matrixdb", matrixdb_id]
-                        print "\"%s\"" % ("\",\"".join(newrow))
+                        if saccharide == "" or saccharide in glycan_dict:
+                            row_str = json.dumps(newrow)
+                            if row_str not in seen_row:
+                                seen_row[row_str] = True
+                                print "\"%s\"" % ("\",\"".join(newrow))
+                        else:
+                            FL.write("%s,%s,glycan-not-in-masterlis\n" % (canon,saccharide))
         if alt_ids_b.find("GAG") != -1 and ids_a.find("uniprotkb") != -1:
             matrixdb_id = alt_ids_b
             source_id = matrixdb_id
@@ -1493,18 +1950,87 @@ def extract_matrixdb_ds(species):
                     matrixdb_id = matrixdb_id.replace("matrixdb:", "")
                     for pair in [["glycan_xref_matrixdb", matrixdb_id],["protein_xref_pubmed",pmid]]:
 
+                        if pair[0] == "protein_xref_pubmed" and pair[1].isdigit() == False:
+                            continue
                         newrow = [canon,matrixdb_id,matrix_db_label,chebi_id,gag_role,protein_role,ev,saccharide,interaction_type,source,source_id,pair[0], pair[1], "glycan_xref_matrixdb", matrixdb_id]
-                        print "\"%s\"" % ("\",\"".join(newrow))               
+                        if saccharide == "" or saccharide in glycan_dict:
+                            row_str = json.dumps(newrow)
+                            if row_str not in seen_row:
+                                seen_row[row_str] = True
+                                print "\"%s\"" % ("\",\"".join(newrow)) 
+                        else:
+                            FL.write("%s,%s,glycan-not-in-masterlis\n" %(canon,saccharide))              
+    
+    FL.close()
+
+    return
+
+def extract_glycogenes_glycoenzonto_ds(species):
+
+
+    seen_row = {}
+    sheet_obj = {}
+    in_file = "downloads/glycogenes/current/%s_glycogenes_glycoenzonto.csv" % (species)
+    libgly.load_sheet(sheet_obj, in_file, ",")
+    f_list = sheet_obj["fields"]
+    newrow = ["uniprotkb_canonical_ac", "gene_name", "gene_id", "recommended_name_full" ]
+    print "\"%s\"" % ("\",\"".join(newrow))
+    for row in sheet_obj["data"]:
+        ac = row[f_list.index("UniProt")]
+        gene_id = row[f_list.index("Entrez Gene ID")]
+        if ac not in ac2canon:
+            continue
+        canon = ac2canon[ac]
+        rec_name = canon2recname[canon] if canon in canon2recname else ""
+        gene_name_list = canon2genenames[canon] if canon in canon2genenames else ""
+        gene_id_list = canon2geneid[canon] if canon in canon2geneid else [""]
+        for gene_name in gene_name_list:
+            for gene_id in gene_id_list: 
+                newrow = [canon, gene_name, gene_id, rec_name]
+                row_s = json.dumps(newrow)
+                if row_s not in seen_row:
+                    print "\"%s\"" % ("\",\"".join(newrow))
+                    seen_row[row_s] = True
+ 
+    return 
+
+def extract_genelocus_ds(species):
+    
+    data_grid = {"locusinfo":{}}
+    sparqlutil.load_gene_locusinfo(data_grid, species)
+
+    sheet_obj = {}
+    in_file = path_obj["unreviewed"] +  "%s_protein_masterlist.csv" % (species)
+    libgly.load_sheet(sheet_obj, in_file, ",")
+    f_list = sheet_obj["fields"]
+    newrow = ["uniprotkb_canonical_ac","gene_symbol", "ensembl_gene_id", "chromosome_id",
+            "start_pos", "end_pos", "strand"]
+    print "\"%s\"" % ("\",\"".join(newrow))
+    seen = {}
+    for row in sheet_obj["data"]:
+        canon = row[f_list.index("uniprotkb_canonical_ac")]
+        if canon not in seen:
+            gene_name = row[f_list.index("gene_name")]
+            if gene_name in data_grid["locusinfo"]:
+                ensg_id = data_grid["locusinfo"][gene_name]["ensgid"]
+                chr_id = data_grid["locusinfo"][gene_name]["chrid"]
+                start_pos = data_grid["locusinfo"][gene_name]["startpos"]
+                end_pos = data_grid["locusinfo"][gene_name]["endpos"]
+                strand = data_grid["locusinfo"][gene_name]["strand"]
+                newrow = [canon, gene_name, ensg_id, chr_id, start_pos, end_pos, strand]
+                print "\"%s\"" % ("\",\"".join(newrow))
+        seen[canon] = True
+
+
     return
 
 
-def extract_genelocus_ds(species):
+def extract_genelocus_ds_old(species):
 
     gtf_file = path_obj["downloads"] + "ucsc/gtf/%s.gtf" % (species)
     cmd = "readlink -f " + gtf_file
     x = commands.getoutput(cmd)
     libgly.log_file_usage(x, "", "append")
-    
     gene_locus = {}
     with open(gtf_file, 'r') as FR:
         data_frame = csv.reader(FR, delimiter='\t', quotechar='|')
@@ -1555,6 +2081,7 @@ def extract_binary_interactions_ds(species):
     data_grid = {"ac2canon":{}, "interaction":{}}
     sparqlutil.load_interaction(data_grid, species)
 
+    seen_row = {}
     newrow = ["uniprotkb_canonical_ac","intact_ac","participant_uniprotkb_ac","participant_intact_ac",
             "participant_uniprotkb_id","participant_gene_symbol", "participant_taxid","experiments"]
     print "\"%s\"" % ("\",\"".join(newrow))
@@ -1564,7 +2091,10 @@ def extract_binary_interactions_ds(species):
             for o in data_grid["interaction"][ac]:
                 newrow = [canon,o["intactac"], o["puniprotac"],o["pintactac"],o["puniprotid"], 
                         o["pgenename"], o["ptaxid"],o["experiments"]]
-                print "\"%s\"" % ("\",\"".join(newrow))
+                row_str = json.dumps(newrow)
+                if row_str not in seen_row:
+                    seen_row[row_str] = True
+                    print "\"%s\"" % ("\",\"".join(newrow))
     return
 
 
@@ -1641,35 +2171,70 @@ def extract_glycoenzymes_ds(species, dataset):
 
 def extract_function_uniprotkb_ds(species):
 
+    black_list = get_blacklisted_pmids(species)
+
     data_grid = {"function":{}}
     sparqlutil.load_function(data_grid, species)
 
     row = ["uniprotkb_canonical_ac","xref_key", "xref_id","annotation"]
     print "\"%s\""  % ("\",\"".join(row))
 
+    seen_row = {}
     for ac in data_grid["function"]:
         if ac in ac2canon:
             canon = ac2canon[ac]
             for ann_id in data_grid["function"][ac]:
                 ann = data_grid["function"][ac][ann_id]["ann"]
                 ann = ann.replace("\"", "`")
-                row = [canon, "protein_xref_uniprotkb_fun",ac, ann]
-                print "\"%s\""  % ("\",\"".join(row))
-                for pmid in data_grid["function"][ac][ann_id]["pmidlist"]:
-                    row = [canon, "protein_xref_pubmed", pmid, ann]
+                xref_key = "protein_xref_uniprotkb_fun"
+                row = [canon, xref_key,ac, ann]
+                row_str = json.dumps(row)
+                if row_str not in seen_row:
+                    seen_row[row_str] = True
                     print "\"%s\""  % ("\",\"".join(row))
+                for xref_id in data_grid["function"][ac][ann_id]["pmidlist"]:
+                    xref_key = "protein_xref_pubmed"
+                    if xref_id.isdigit() == False:
+                        xref_key = "protein_xref_uniprotkb_fun"
+                        if xref_id[0:3] == "MF_":
+                            xref_key = "protein_xref_hamap"
+                    if xref_id in black_list:
+                        continue
+                    row = [canon, xref_key, xref_id, ann]
+                    row_str = json.dumps(row)
+                    if row_str not in seen_row:
+                        seen_row[row_str] = True
+                        print "\"%s\""  % ("\",\"".join(row))
 
     
     return
 
 
+def load_canon2geneid(species):
+
+    in_file = path_obj["unreviewed"] + "%s_protein_xref_geneid.csv" % (species)
+    if os.path.isfile(in_file) == False:
+        return {}
+
+    data_frame = {}
+    libgly.load_sheet(data_frame,in_file, ",")
+    f_list = data_frame["fields"]
+
+    canon2geneid = {}
+    for row in data_frame["data"]:
+        canon = row[f_list.index("uniprotkb_canonical_ac")]
+        gene_id = row[f_list.index("xref_id")]
+        if canon not in canon2geneid:
+            canon2geneid[canon] = []
+        if gene_id not in canon2geneid[canon] :
+            canon2geneid[canon].append(gene_id)
+
+    return canon2geneid
+
+
     
 def extract_disease_glycosmos_ds(species):
 
-    #/data/projects/glygen/downloads/glycosmos/current/glycosmos_gdgdb.csv
-    #/data/projects/glygen/generated/datasets/reviewed/human_protein_xref_geneid.csv
-    #/data/projects/glygen/downloads/glycosmos/current/graph-1/ggdonto.ttl
-    #/data/projects/glygen/generated/datasets/unreviewed/protein_disease_idmap.csv
 
     in_file = path_obj["downloads"] + "glycosmos/current/glycosmos_gdgdb.csv"
     data_frame = {}
@@ -1684,18 +2249,6 @@ def extract_disease_glycosmos_ds(species):
         if ggd_id not in geneid2ggdid[gene_id]:
             geneid2ggdid[gene_id].append(ggd_id)
 
-    in_file = path_obj["unreviewed"] + "%s_protein_xref_geneid.csv" % (species)
-    data_frame = {}
-    libgly.load_sheet(data_frame,in_file, ",")
-    f_list = data_frame["fields"]
-    canon2geneid = {}
-    for row in data_frame["data"]:
-        canon = row[f_list.index("uniprotkb_canonical_ac")]
-        gene_id = row[f_list.index("xref_id")]
-        if canon not in canon2geneid:
-            canon2geneid[canon] = []
-        if gene_id not in canon2geneid[canon] :
-            canon2geneid[canon].append(gene_id)
 
     in_file = path_obj["downloads"] + "glycosmos/current/graph-1/ggdonto.ttl"
     cmd = "readlink -f " + in_file
@@ -1769,6 +2322,31 @@ def extract_disease_glycosmos_ds(species):
 
 
 
+def load_doid2name():
+
+    tmp_dict = {}
+    in_file = path_obj["unreviewed"] + "/protein_disease_names.csv"
+    data_frame = {}
+    libgly.load_sheet(data_frame,in_file, ",")
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        xref_key = row[f_list.index("xref_key")]
+        xref_id = row[f_list.index("xref_id")]
+        name = row[f_list.index("name")]
+        description = row[f_list.index("description")]
+        if xref_key not in tmp_dict:
+            tmp_dict[xref_key] = {}
+        if xref_id not in tmp_dict[xref_key]:
+            tmp_dict[xref_key][xref_id] = {"name":"", "description":"", "synonyms":[]}
+        if row[f_list.index("name_type")] == "recommended_name":
+            tmp_dict[xref_key][xref_id]["name"] = name
+            tmp_dict[xref_key][xref_id]["description"] = description
+        if row[f_list.index("name_type")] == "synonym" and name not in tmp_dict[xref_key][xref_id]["synonyms"]:
+            tmp_dict[xref_key][xref_id]["synonyms"].append(name)
+    
+
+    return tmp_dict
+
 
 def extract_disease_uniprotkb_ds(species):
 
@@ -1778,20 +2356,6 @@ def extract_disease_uniprotkb_ds(species):
         "ac2mondo":{},
         "mimid2diseasename":{}
     }
-
-
-    doid2name = {}
-    in_file = path_obj["unreviewed"] + "/protein_disease_names.csv"
-    data_frame = {}
-    libgly.load_sheet(data_frame,in_file, ",")
-    f_list = data_frame["fields"]
-    for row in data_frame["data"]:
-        if row[f_list.index("xref_key")] != "do":
-            continue
-        if row[f_list.index("name_type")] != "recommended_name":
-            continue
-        doid2name[row[f_list.index("xref_id")]] = row[f_list.index("name")]
-
 
     do_map, doid2mondoid, mondoid2doid, doid2mimid = {}, {}, {}, {}
     load_disease_id_map(do_map, doid2mondoid, mondoid2doid, doid2mimid)
@@ -1912,8 +2476,6 @@ def extract_disease_genomics_england_ds(species):
 
 def extract_disease_alliance_genome_ds(species):
 
-    if species not in ["mouse", "rat"]:
-        return
 
     do_map, doid2mondoid, mondoid2doid, doid2mimid = {}, {}, {}, {}
     load_disease_id_map(do_map, doid2mondoid, mondoid2doid, doid2mimid)
@@ -1949,10 +2511,16 @@ def extract_disease_compiled_ds(dataset, species):
     libgly.load_sheet(data_frame, in_file, ",")
     f_list = data_frame["fields"]
     print "\"%s\""  % ("\",\"".join(["uniprotkb_canonical_ac"] + f_list[1:]))
-
     log_file_one = path_obj["logs"] +   "%s_protein_%s.1.log" % (species, dataset)
     FL1 = open(log_file_one, "w")
     for row in data_frame["data"]:
+        
+        if dataset in ["disease_glygen"]:
+            xref_key = "protein_xref_glygen_ds"
+            ds = "%s_protein_%s" % (species, dataset)
+            xref_id = ds2bco[ds] if ds in ds2bco else ""
+            row[f_list.index("xref_key")] = xref_key
+            row[f_list.index("xref_id")] = xref_id
         ac = row[0]
         if ac in ac2canon:
             canon = ac2canon[ac]
@@ -1964,6 +2532,79 @@ def extract_disease_compiled_ds(dataset, species):
 
     return
 
+
+def extract_citations_generic_ds(species, dataset):
+
+
+    data_frame = {}
+    in_file = path_obj["unreviewed"] +  "%s_protein_%s.csv" % (species,dataset)
+    in_file = in_file.replace("citations_", "")
+    libgly.load_sheet(data_frame, in_file, ",")
+    f_list = data_frame["fields"]
+
+    
+    biomarker_id_dict = {}
+    seen_xref_id = {}
+    for row in data_frame["data"]:
+        canon = row[f_list.index("uniprotkb_canonical_ac")]
+        xref_key = row[f_list.index("xref_key")]
+        xref_id = row[f_list.index("xref_id")]
+        src_xref_key, src_xref_id = "", ""
+        if "src_xref_key" in f_list:
+            src_xref_key = row[f_list.index("src_xref_key")]
+            src_xref_id = row[f_list.index("src_xref_id")]
+        if "dbsnp_id" in f_list:
+            src_xref_key = "protein_xref_dbsnp"
+            src_xref_id = row[f_list.index("dbsnp_id")]
+        if "entrez_id" in f_list:
+            src_xref_key = "protein_xref_entrez"
+            src_xref_id = row[f_list.index("entrez_id")]
+        if xref_key in ["protein_xref_pubmed", "protein_xref_doi"]:
+            combo_id = "%s|%s|%s|%s|%s" % (canon, xref_key, xref_id, src_xref_key, src_xref_id)
+            seen_xref_id[combo_id] = True
+            if dataset == "citations_biomarkers":
+                biomarker_id = row[f_list.index("biomarker_id")]
+                if combo_id not in biomarker_id_dict:
+                    biomarker_id_dict[combo_id] = {}
+                biomarker_id_dict[combo_id][biomarker_id] = True
+
+
+    newrow = ["uniprotkb_canonical_ac","title","journal_name",
+            "publication_date", "authors"]
+    newrow += ["xref_key", "xref_id", "src_xref_key", "src_xref_id"]
+    if dataset == "citations_biomarkers":
+        newrow += ["biomarker_id"]
+    print "\"%s\"" % ("\",\"".join(newrow))
+
+    compiled_in_file = "compiled/doi_citations.csv"
+    log_dict = {}
+    log_file = path_obj["logs"] +  "%s_protein_%s.log" % (species,dataset)
+    FL = open(log_file, "w")
+    for combo_id in seen_xref_id:
+        canon, xref_key, xref_id, src_xref_key, src_xref_id = combo_id.split("|")
+        if src_xref_id == "":
+            src_xref_key, src_xref_id = "protein_xref_pubmed", xref_id
+        cite_info = {"row":[]}
+        if xref_key == "protein_xref_pubmed":
+            cite_info = libgly.get_citation(xref_id)
+        elif xref_key == "protein_xref_doi":
+            cite_info = libgly.get_doi_citation(xref_id, compiled_in_file)
+        newrow = cite_info["row"]
+        if newrow != []:
+            if dataset == "citations_biomarkers":
+                for biomarker_id in biomarker_id_dict[combo_id]:
+                    print "\"%s\"" % ("\",\"".join([canon] + newrow + [xref_key, xref_id, src_xref_key, src_xref_id, biomarker_id]))
+            else:
+                print "\"%s\"" % ("\",\"".join([canon] + newrow + [xref_key, xref_id, src_xref_key, src_xref_id]))
+        elif xref_id not in log_dict:
+            FL.write("%s,%s\n" % (xref_id, ";".join(cite_info["flaglist"])))
+            log_dict[xref_id] = True
+
+    FL.close()
+
+
+
+    return
 
 def extract_citations_reactome_ds(species):
 
@@ -1992,14 +2633,24 @@ def extract_citations_reactome_ds(species):
     newrow += ["xref_key", "xref_id", "src_xref_key", "src_xref_id"]
     print "\"%s\"" % ("\",\"".join(newrow))
     seen = {}
+    log_dict = {}
+    log_file = path_obj["logs"] +  "%s_protein_citations_reactome.log" % (species)
+    FL = open(log_file, "w")
+    
+
     for row in data_frame["data"]:
-        pmid = row[f_list.index("pmid")]
-        pathway_id = row[f_list.index("pathway_id")]
-        if pmid in black_list:
+        reaction_id = row[f_list.index("reaction_id")].strip()
+        pmid = row[f_list.index("pmid")].strip()
+        pathway_id = row[f_list.index("pathway_id")].strip()
+        if pmid in black_list or pmid == "":
             continue
         if pathway_id not in pathway2canon:
+            if pmid not in log_dict:
+                FL.write("%s,%s\n" % (pmid, "pathwayid='%s' not mapped to canonical" % (pathway_id)))
+                log_dict[pmid] = True
             continue
-        newrow = libgly.get_citation(pmid, path_obj["downloads"] + "ncbi/medline/")
+        cite_info = libgly.get_citation(pmid)
+        newrow = cite_info["row"]
         if newrow != []:
             for canon in pathway2canon[pathway_id]:
                 combo_id = "%s %s" % (canon, pmid)
@@ -2009,8 +2660,11 @@ def extract_citations_reactome_ds(species):
                     out_row = [canon] + newrow + [xref_key, xref_id,src_xref_key, src_xref_id]
                     print "\"%s\"" % ("\",\"".join(out_row))
                     seen[combo_id] = True
+        elif pmid not in log_dict:
+            FL.write("%s,%s\n" % (pmid, ";".join(cite_info["flaglist"])))
+            log_dict[pmid] = True
 
-
+    FL.close()
 
     return
 
@@ -2032,28 +2686,77 @@ def get_blacklisted_pmids(species):
 
 def extract_citations_uniprotkb_ds(species):
 
+
+    seen_combo = {}
     black_list = get_blacklisted_pmids(species)
-
-    data_grid = {"citelist":{}}
-    sparqlutil.load_citelist(data_grid, species)
-
+    log_dict = {}
+    log_file = path_obj["logs"] +  "%s_protein_citations_uniprotkb.log" % (species)
+    FL = open(log_file, "w")
+    
     row = ["uniprotkb_canonical_ac","title","journal_name", "publication_date", "authors"]
     row += ["xref_key", "xref_id", "src_xref_key", "src_xref_id"]
     print "\"%s\""  % ("\",\"".join(row))
+   
+    file_list = [path_obj["unreviewed"] +  "%s_protein_function_uniprotkb.csv" % (species)]
+    file_list += [path_obj["unreviewed"] +  "%s_protein_ptm_annotation_uniprotkb.csv" % (species)] 
+    file_list += [path_obj["unreviewed"] +  "%s_protein_site_annotation_uniprotkb.csv" % (species)]
+    for in_file in file_list:
+        data_frame = {}
+        libgly.load_sheet(data_frame, in_file, ",")
+        f_list = data_frame["fields"]
+        for row in data_frame["data"]:
+            canon = row[f_list.index("uniprotkb_canonical_ac")]
+            xref_key,xref_id = row[f_list.index("xref_key")], row[f_list.index("xref_id")]
+            if xref_key.find("xref_pubmed") != -1:
+                pmid = xref_id
+                if pmid.isdigit() == False:
+                    continue
+                if pmid in black_list:
+                    continue
+                combo = "%s|%s" % (canon, pmid)
+                if combo in seen_combo:
+                    continue
+                seen_combo[combo] = True
+                cite_info = libgly.get_citation(pmid)
+                newrow = cite_info["row"]
+                if newrow != []:
+                    xref_key, xref_id = "protein_xref_pubmed", pmid
+                    src_xref_key, src_xref_id = "protein_xref_uniprotkb", canon.split("-")[0]
+                    print "\"%s\"" % ("\",\"".join([canon] + newrow + [xref_key, xref_id, src_xref_key, src_xref_id]))
+                elif pmid not in log_dict:
+                    FL.write("%s,%s\n" % (pmid, ";".join(cite_info["flaglist"])))
+                    log_dict[pmid] = True
+
+    data_grid = {"citelist":{}}
+    sparqlutil.load_citelist(data_grid, species)
     for ac in data_grid["citelist"]:
         if ac in ac2canon:
             canon = ac2canon[ac]
             xref_key = "protein_xref_uniprotkb"
             xref_id = ac
             for obj in data_grid["citelist"][ac]:
+                if obj["pmid"].isdigit() == False:
+                    continue
                 if obj["pmid"] in black_list:
                     continue
+                combo = "%s|%s" % (canon, obj["pmid"])
+                if combo in seen_combo:
+                    continue
+                seen_combo[combo] = True
                 authors = ", ".join(obj["authorlist"])
+                if authors == "":
+                    continue
                 xref_key, xref_id = "protein_xref_pubmed", obj["pmid"]
                 src_xref_key, src_xref_id = "protein_xref_uniprotkb", ac
                 row = [canon, obj["journaltitle"], obj["journalname"], 
                     obj["pubdate"], authors, xref_key, xref_id, src_xref_key, src_xref_id]
                 print "\"%s\""  % ("\",\"".join(row))
+
+
+    FL.close()
+    return
+ 
+ 
 
 
 
@@ -2252,12 +2955,73 @@ def extract_ac2pdb_ds(species):
                 print "\"%s\""  % ("\",\"".join(row))
 
 
+def extract_iedb_ds(species):
+
+
+    fasta_file = "unreviewed/%s_protein_canonicalsequences.fasta" % (species)
+    seq_hash = load_fasta_sequences(fasta_file)
+
+    f_map = {
+        "iedb_id":"features.xrefs.id",
+        "epitope_peptide":"features.epitopeSequence",
+        "epitope_description":"features.description",
+        "evidence_code":"features.evidences.code"
+    }
+    
+    field_list_one = ["uniprotkb_canonical_ac"]
+    field_list_two = ["iedb_id","epitope_peptide","epitope_description","evidence_code"]
+    field_list_three = ["epitope_start_pos","epitope_end_pos","epitope_start_aa", "epitope_end_aa", "xref_key", "xref_id", "src_xref_key", "src_xref_id"]
+    print "\"%s\""  % ("\",\"".join(field_list_one + field_list_two + field_list_three)) 
+
+    seen_row = {}
+    tax_name = species_obj[species]["nt_file"].split("-proteome-")[1].replace(".nt", "")
+    in_file = "downloads/ebi/current/IEDB-%s.tsv" % (tax_name)
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, "\t")
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        ac = row[f_list.index("accession")]
+        if ac not in ac2canon:
+            continue
+        canon = ac2canon[ac]
+        if canon not in seq_hash:
+            continue
+        epitope_start_pos = int(row[f_list.index("features.begin")])
+        epitope_end_pos = int(row[f_list.index("features.end")])
+        epitope_peptide = row[f_list.index("features.epitopeSequence")]
+        if epitope_start_pos < 0 or epitope_end_pos > len(seq_hash[canon]):
+            continue
+        peptide_in_canon = seq_hash[canon][epitope_start_pos-1:epitope_end_pos] 
+        if epitope_peptide != peptide_in_canon:
+            continue
+ 
+        newrow = [canon]
+        for f in field_list_two:
+            val = row[f_list.index(f_map[f])]
+            newrow.append(val)
+        val_dict = {"xref_key":"protein_xref_pubmed", "src_xref_key":"protein_xref_iedb"}
+        val_dict["epitope_start_pos"] = row[f_list.index("features.begin")]
+        val_dict["epitope_end_pos"] = row[f_list.index("features.end")]
+        val_dict["epitope_start_aa"] = peptide_in_canon[0]
+        val_dict["epitope_end_aa"] = peptide_in_canon[-1]
+        val_dict["xref_id"] = row[f_list.index("features.evidences.source.id")]
+        val_dict["src_xref_id"] = row[f_list.index("features.xrefs.id")]
+        for f in field_list_three:
+            newrow.append(val_dict[f])
+        row_str = json.dumps(newrow)
+        if row_str in seen_row:
+            continue
+        seen_row[row_str] = True
+        print "\"%s\""  % ("\",\"".join(newrow))
+        
+    return
+
 def extract_xrefs_ds(species, ds_name):
 
     data_grid = {"reactome":{}}
 
+
     sheet_obj = {}
-    
     if ds_name in ["xref_glycoprotdb"]:
         in_file = path_obj["downloads"] + "/glycoprotdb/protein_xref_glycoprotdb.csv"
         data_frame = {}
@@ -2268,6 +3032,33 @@ def extract_xrefs_ds(species, ds_name):
             db_id = row[f_list.index("gpdb_id")]
             db_label = row[f_list.index("p_name")]
             o = {"id":db_id, "label":db_label}
+            if ac not in sheet_obj:
+                sheet_obj[ac] = []
+            sheet_obj[ac].append(o)
+    elif ds_name in ["xref_viralglycome"]:
+        in_file = "compiled/%s_protein_xref_viralglycome.csv" % (species)
+        data_frame = {}
+        libgly.load_sheet(data_frame, in_file, ",")
+        f_list = data_frame["fields"]
+        for row in data_frame["data"]:
+            ac = row[f_list.index("uniprot_canonical_ac")].split("-")[0]
+            db_id = row[f_list.index("xref_id")]
+            db_label = row[f_list.index("xref_label")]
+            o = {"id":db_id, "label":db_label}
+            if ac not in sheet_obj:
+                sheet_obj[ac] = []
+            sheet_obj[ac].append(o)
+    elif ds_name in ["xref_iedb"]:
+        tax_name = species_obj[species]["nt_file"].split("-proteome-")[1].replace(".nt", "")
+        in_file = "downloads/ebi/current/IEDB-%s.tsv" % (tax_name)
+        #print in_file
+        data_frame = {}
+        libgly.load_sheet(data_frame, in_file, "\t")
+        f_list = data_frame["fields"]
+        for row in data_frame["data"]:
+            ac = row[f_list.index("accession")]
+            db_id = row[f_list.index("features.xrefs.id")] 
+            o = {"id":db_id, "label":"IEDB"}
             if ac not in sheet_obj:
                 sheet_obj[ac] = []
             sheet_obj[ac].append(o)
@@ -2343,6 +3134,8 @@ def extract_xrefs_ds(species, ds_name):
     elif ds_name in ["xref_uniprotkb"]:
         sparqlutil.log_nt_file_used(species)
         for ac in ac2canon:
+            if ac.strip() == "":
+                continue
             o = {"id":ac, "label":"UniProtKB"}
             if ac not in sheet_obj:
                 sheet_obj[ac] = []
@@ -2355,32 +3148,71 @@ def extract_xrefs_ds(species, ds_name):
             libgly.load_sheet(data_frame, in_file, ",")
             f_list = data_frame["fields"]
             for row in data_frame["data"]:
-                if row[f_list.index("xref_key")] == "protein_xref_pubmed":
-                    continue
                 ac = row[f_list.index("uniprotkb_canonical_ac")].split("-")[0]
-                db_id = row[f_list.index("xref_id")]
+                src_xref_key = row[f_list.index("src_xref_key")]
+                db_id = row[f_list.index("src_xref_id")]
+                if db_id.strip() == "":
+                    continue
                 db_label = "UniCarbKB"
-                o = {"id":db_id, "label":db_label}
+                o = {"ac":ac, "id":db_id, "label":db_label}
                 if ac not in sheet_obj:
                     sheet_obj[ac] = []
                 o_str = json.dumps(o)
                 if o_str not in seen_ref:
                     sheet_obj[ac].append(o)
                     seen_ref[o_str] = True
-    elif ds_name in ["xref_oglcnac_db"]:
-        pref = "o_glcnac_mcw"
+    elif ds_name in ["xref_oglcnac_mcw", "xref_oglcnac_atlas", "xref_glyconnect"]:
+        tmp_dict = {
+            "xref_oglcnac_mcw":{"pref":"oglcnac_mcw", "lbl":"O-GlcNAc MCW"},
+            "xref_oglcnac_atlas":{"pref":"oglcnac_atlas", "lbl":"O-GlcNAc Atlas"},
+            "xref_glyconnect":{"pref":"glyconnect", "lbl":""}
+        }
+        pref = tmp_dict[ds_name]["pref"]
+        db_label = tmp_dict[ds_name]["lbl"]
         in_file = path_obj["unreviewed"] + "%s_proteoform_glycosylation_sites_%s.csv" %(species,pref)
         data_frame = {}
         libgly.load_sheet(data_frame, in_file, ",")
         f_list = data_frame["fields"]
         seen_ref = {}
         for row in data_frame["data"]:
-            if row[f_list.index("xref_key")] == "protein_xref_pubmed":
-                continue
             ac = row[f_list.index("uniprotkb_canonical_ac")].split("-")[0]
-            db_id = row[f_list.index("xref_id")]
-            db_label = "O-GlcNAc MCW"
+            db_id = row[f_list.index("src_xref_id")]
+            if db_id.strip() == "":
+                continue
             o = {"id":db_id, "label":db_label}
+            if ac not in sheet_obj:
+                sheet_obj[ac] = []
+            o_str = json.dumps(o)
+            if o_str not in seen_ref:
+                sheet_obj[ac].append(o)
+                seen_ref[o_str] = True
+    elif ds_name == "xref_biomuta":
+        in_file = path_obj["unreviewed"] + "%s_protein_mutation_cancer.csv" %(species)
+        data_frame = {}
+        libgly.load_sheet(data_frame, in_file, ",")
+        f_list = data_frame["fields"]
+        seen_ref = {}
+        for row in data_frame["data"]:
+            canon = row[f_list.index("uniprotkb_canonical_ac")]
+            ac = canon.split("-")[0]
+            o = {"id":ac, "label":""}
+            if ac not in sheet_obj:
+                sheet_obj[ac] = []
+            o_str = json.dumps(o)
+            if o_str not in seen_ref:
+                sheet_obj[ac].append(o)
+                seen_ref[o_str] = True
+    elif ds_name == "xref_biomarkerkb":
+        in_file = path_obj["unreviewed"] + "%s_protein_biomarkers.csv" %(species)
+        data_frame = {}
+        libgly.load_sheet(data_frame, in_file, ",")
+        f_list = data_frame["fields"]
+        seen_ref = {}
+        for row in data_frame["data"]:
+            canon = row[f_list.index("uniprotkb_canonical_ac")]
+            ac = canon.split("-")[0]
+            biomarker_id = row[f_list.index("biomarker_id")]
+            o = {"id":biomarker_id, "label":""}
             if ac not in sheet_obj:
                 sheet_obj[ac] = []
             o_str = json.dumps(o)
@@ -2391,10 +3223,13 @@ def extract_xrefs_ds(species, ds_name):
         sparqlutil.load_ac2xref(sheet_obj, species, config_obj["xref"][ds_name])
 
 
+    seen_row = {} 
     row = ["uniprotkb_canonical_ac","xref_key", "xref_id","xref_label"]
     print "\"%s\""  % ("\",\"".join(row))
     seen = {}
     xref_key = "protein_%s" % (ds_name)
+    if ds_name == "xref_unicarbkb":
+        xref_key = "protein_xref_unicarbkb_ds"
     for ac in ac2canon:
         canon = ac2canon[ac]
         if ac in sheet_obj:
@@ -2407,15 +3242,13 @@ def extract_xrefs_ds(species, ds_name):
                         break
                 xref_id = selected_o["id"]
                 xref_label = selected_o["label"].encode('ascii', 'ignore').decode('ascii')
-                row = [canon, xref_key, xref_id.split(".")[0], xref_label]
-                print "\"%s\""  % ("\",\"".join(row))
-                seen[canon] = True
-
-                #print "\"%s\""  % ("\",\"".join(row))
-                #if len(xref_id.split(".")) > 1:
-                #    row = [canon, xref_key, xref_id.split(".")[0], xref_label]
-                #    print "\"%s\""  % ("\",\"".join(row))
-                #seen[canon] = True
+                if ac in ac2canon_strict:
+                    seen[canon] = True
+                    row = [canon, xref_key, xref_id.split(".")[0], xref_label]
+                    row_str = json.dumps(row)
+                    if row_str not in seen_row:
+                        print "\"%s\"" % ("\",\"".join(row))
+                        seen_row[row_str] = True
             else:
                 for o in sheet_obj[ac]:
                     xref_id = o["id"]
@@ -2423,18 +3256,36 @@ def extract_xrefs_ds(species, ds_name):
                     if xref_key == "protein_xref_biomuta":
                         xref_id = ac
                     if ds_name == "xref_refseq":
-                        row = [canon, xref_key, xref_id.split(".")[0], xref_label]
-                        print "\"%s\""  % ("\",\"".join(row))
+                        if ac in ac2canon_strict:
+                            row = [canon, xref_key, xref_id.split(".")[0], xref_label]
+                            row_str = json.dumps(row)
+                            if row_str not in seen_row:
+                                print "\"%s\"" % ("\",\"".join(row))
+                                seen_row[row_str] = True
+                    elif ds_name == "xref_alphafolddb":
+                        if ac in ac2canon_strict:
+                            row = [canon, xref_key, xref_id, xref_label]
+                            row_str = json.dumps(row)
+                            if row_str not in seen_row:
+                                print "\"%s\"" % ("\",\"".join(row))
+                                seen_row[row_str] = True
                     else:
+                        xref_id = ac if xref_key == "protein_xref_orthodb" else xref_id
                         row = [canon, xref_key, xref_id, xref_label]
-                        print "\"%s\""  % ("\",\"".join(row))
+                        row_str = json.dumps(row)
+                        if row_str not in seen_row:
+                            print "\"%s\"" % ("\",\"".join(row))
+                            seen_row[row_str] = True
                     seen[canon] = True
-        elif ds_name in ["xref_hepatitisconline", "xref_viruspathogenresource"]:
+        elif species.find("hcv") != -1 and ds_name in ["xref_hepatitisconline", "xref_viruspathogenresource"]:
             xref_id = "hcv"
             xref_label = ""
             row = [canon, xref_key, xref_id, xref_label]
-            print "\"%s\""  % ("\",\"".join(row))
             seen[canon] = True
+            row_str = json.dumps(row)
+            if row_str not in seen_row:
+                print "\"%s\"" % ("\",\"".join(row))
+                seen_row[row_str] = True
 
     #Add isoform level mappings for xref_refseq
     if ds_name == "xref_refseq":
@@ -2453,11 +3304,16 @@ def extract_xrefs_ds(species, ds_name):
                 xref_id = selected
                 xref_label = ""
                 row = [canon, xref_key, xref_id, xref_label]
-                print "\"%s\""  % ("\",\"".join(row))
+                row_str = json.dumps(row)
+                if row_str not in seen_row:
+                    print "\"%s\"" % ("\",\"".join(row))
+                    seen_row[row_str] = True
                 if len(xref_id.split(".")) > 1:
                     row = [canon, xref_key, xref_id.split(".")[0], xref_label]
-                    print "\"%s\""  % ("\",\"".join(row))
-
+                    row_str = json.dumps(row)
+                    if row_str not in seen_row:
+                        print "\"%s\"" % ("\",\"".join(row))
+                        seen_row[row_str] = True
 
     return
 
@@ -2466,25 +3322,38 @@ def extract_xrefs_ds(species, ds_name):
 def extract_citations_refseq_ds(species):
 
     combo_id_list_one = get_refseq_pmidlist(species,"from_annotation")
-    combo_id_list_two = get_refseq_pmidlist(species,"from_references")
-    #combo_id_list_two = []
+    #combo_id_list_two = get_refseq_pmidlist(species,"from_references")
+    combo_id_list_two = []
     combo_id_list = list(set(combo_id_list_one + combo_id_list_two))
+
+    
 
     newrow = ["uniprotkb_canonical_ac","title","journal_name",
             "publication_date", "authors"]
     newrow += ["xref_key", "xref_id", "src_xref_key", "src_xref_id"]
     print "\"%s\"" % ("\",\"".join(newrow))
+    
+    log_dict = {}
+    log_file = path_obj["logs"] +  "%s_protein_citations_refseq.log" % (species)
+    FL = open(log_file, "w")
+    cite_info_dict = {}
     for combo_id in combo_id_list:
         canon, refseq_ac, pmid = combo_id.split(" ")
         xref_key = "protein_xref_refseq"
         xref_id = refseq_ac
-        newrow = libgly.get_citation(pmid, path_obj["downloads"] + "ncbi/medline/")
+        if pmid not in cite_info_dict:
+            cite_info_dict[pmid] = libgly.get_citation(pmid)
+        newrow = cite_info_dict[pmid]["row"]
         if newrow != []:
             xref_key, xref_id = "protein_xref_pubmed", pmid
             src_xref_key, src_xref_id = "protein_xref_refseq", refseq_ac
             print "\"%s\"" % ("\",\"".join([canon] + newrow + [xref_key, xref_id, src_xref_key, src_xref_id]))
+        elif pmid not in log_dict:
+            FL.write("%s,%s\n" % (pmid, ";".join(cite_info_dict[pmid]["flaglist"])))
+            log_dict[pmid] = True
 
-      
+    FL.close()
+
     return
 
 
@@ -2509,8 +3378,8 @@ def get_refseq_pmidlist(species, target_src):
             xref_id = row[f_list.index("xref_id")]
             if xref_key == "protein_xref_pubmed":
                 pmid = xref_id
-                if pmid in black_list:
-                    continue
+                #if pmid in black_list:
+                #    continue
                 combo_id = "%s %s %s" % (canon, refseq_ac, pmid)
                 if combo_id not in seen:
                     seen[combo_id] = True
@@ -2546,8 +3415,8 @@ def get_refseq_pmidlist(species, target_src):
             for ref in record.annotations["references"]:
                 pmid = ref.pubmed_id
                 if pmid != "":
-                    if pmid in black_list:
-                        continue
+                    #if pmid in black_list:
+                    #    continue
                     combo_id = "%s %s %s" % (canon, refseq_ac, pmid)
                     if combo_id not in seen:
                         seen[combo_id] = True
@@ -2555,20 +3424,20 @@ def get_refseq_pmidlist(species, target_src):
     
     return seen.keys()
 
+def load_glycan_masterdict():
 
-def load_glycan_masterlist():
-
-    glycan_list = []
+    glycan_dict = {}
     data_frame = {}
     in_file = path_obj["unreviewed"] +  "glycan_masterlist.csv"
     libgly.load_sheet(data_frame, in_file, ",")
     f_list = data_frame["fields"]
     for row in data_frame["data"]:
         ac = row[f_list.index("glytoucan_ac")]
-        if ac not in glycan_list:
-            glycan_list.append(ac)
+        glycan_dict[ac] = True
 
-    return glycan_list
+    return glycan_dict
+
+
 
 
 def get_aa_dict():
@@ -2590,8 +3459,8 @@ def get_aa_dict():
 
 def get_glycosylation_sites(species):
 
-
-    glycan_list = load_glycan_masterlist()
+    
+    glycan_dict = load_glycan_masterdict()
     aa_dict = get_aa_dict()
 
     sites_dict = {}
@@ -2600,10 +3469,17 @@ def get_glycosylation_sites(species):
         if in_file.find("stat") != -1:
             continue
         source = in_file.split("_")[-1].split(".")[0]
-        data_frame = {}
-        libgly.load_sheet(data_frame, in_file, ",")
-        f_list = data_frame["fields"]
-        for row in data_frame["data"]:
+        FR = open(in_file, "r") 
+        idx = 0
+        f_list = []
+        for line in FR:
+            idx += 1
+            row = line.strip().split("\",\"")
+            row[0] = row[0].replace("\"", "")
+            row[-1] = row[-1].replace("\"", "")
+            if idx == 1:
+                f_list = row
+                continue
             canon = row[f_list.index("uniprotkb_canonical_ac")]
             gly_type = row[f_list.index("glycosylation_type")]
             continue_flag = False
@@ -2612,7 +3488,6 @@ def get_glycosylation_sites(species):
                     continue_flag = True
             if continue_flag == True:
                 continue
-
             pos = int(row[f_list.index("glycosylation_site_uniprotkb")].split("|")[0])
             amino_acid = row[f_list.index("amino_acid")].upper()
             ref_aa = aa_dict[amino_acid]
@@ -2620,7 +3495,7 @@ def get_glycosylation_sites(species):
             xref_id = row[f_list.index("xref_id")]
             glytoucan_ac = row[f_list.index("saccharide")].split("|")[0]
             score = 1
-            if glytoucan_ac not in glycan_list:
+            if glytoucan_ac not in glycan_dict:
                 glytoucan_ac = ""
                 score = 0
             o = {"glytype":gly_type, "score":score, "xrefid":xref_id, "xrefkey":xref_key, 
@@ -2629,6 +3504,7 @@ def get_glycosylation_sites(species):
             if combo_id not in sites_dict:
                 sites_dict[combo_id] = []
             sites_dict[combo_id].append(o)
+        FR.close()
 
     return sites_dict
 
@@ -2740,6 +3616,7 @@ def extract_mutation_cancer_glycosylation_loss_ds(species):
     ]
     print "\"%s\""  % ("\",\"".join(newrow))
 
+    seen_row = {}
     site_list = site_ann["gly"].keys()
     for combo_id in site_list:
         canon = combo_id.split(" ")[0]
@@ -2777,7 +3654,10 @@ def extract_mutation_cancer_glycosylation_loss_ds(species):
                             g_obj["xrefkey"],g_obj["xrefid"],str(g_obj["score"]),
                             g_obj["source"]
                         ]
-                        print "\"%s\""  % ("\",\"".join(newrow))
+                        row_str = json.dumps(newrow)
+                        if row_str not in seen_row:
+                            seen_row[row_str] = True
+                            print "\"%s\""  % ("\",\"".join(newrow))
                        
 
     return
@@ -3002,6 +3882,9 @@ def extract_integrated_site_annotation_ds(species):
                 if combo_id in site2glytype:
                     gly_type = ";".join(sorted(site2glytype[combo_id]))
                 newrow = row[0:2] + [combo_flag, gly_type, has_glytoucan] + row[2:]
+                xref_key, xref_id = newrow[-2], newrow[-1]
+                if xref_key == "protein_xref_pubmed" and xref_id.isdigit() == False:
+                    continue 
                 row_str = " ".join(newrow).lower()
                 if row_str not in seen_row:
                     print "\"%s\""  % ("\",\"".join(newrow))
@@ -3037,7 +3920,8 @@ def extract_signalp_annotation_ds(species):
         "signalp_end_pos","uniprotkb_protein_sequence","uniprotkb_protein_signalp_sequence",
         "uniprotkb_protein_signalp_cleaved_sequence","eco_id","evidence"]
     print "\"%s\""  % ("\",\"".join(row))
-    
+
+    seen_row = {}    
     
     for ac in data_grid["signalpann"]:
         if ac not in ac2canon:
@@ -3062,7 +3946,10 @@ def extract_signalp_annotation_ds(species):
             row = [canon, gene_name, full_name,str(len(full_seq)),
                     str(len(peptide_seq)), str(len(cleaved_seq)),
                     str(start_pos),str(end_pos),full_seq,peptide_seq,cleaved_seq,ecoid,pmid]
-            print "\"%s\""  % ("\",\"".join(row))
+            row_str = json.dumps(row)
+            if row_str not in seen_row:
+                seen_row[row_str] = True
+                print "\"%s\""  % ("\",\"".join(row))
 
 
     return
@@ -3152,6 +4039,8 @@ def extract_proteinnames_ds(species, ds_name):
 def extract_genenames_uniprotkb_ds(species):
 
 
+    seen_row = {}
+
     data_grid = {"genenames":{}}
     sparqlutil.load_gene_names(data_grid, species)
     row = ["uniprotkb_canonical_ac", "gene_symbol_recommended", "gene_symbol_alternative", "orf_name"]
@@ -3166,7 +4055,10 @@ def extract_genenames_uniprotkb_ds(species):
             row = [canon]
             for k in ["preflabel", "altlabel", "orfname"]:
                 row.append(o[k])
-            print "\"%s\""  % ("\",\"".join(row))
+            row_str = json.dumps(row)
+            if row_str not in seen_row:
+                seen_row[row_str] = True
+                print "\"%s\""  % ("\",\"".join(row))
 
 
 def extract_pdb_shortlist_ds(species):
@@ -3239,7 +4131,7 @@ def extract_ptm_annotation_uniprotkb_ds(species):
         canon = ac2canon[ac]
         if ac in data_grid["ptmann"]:
             for obj in data_grid["ptmann"][ac]:
-                if obj["pmid"].strip() == "":
+                if obj["pmid"].strip() == "" or obj["pmid"].isdigit() == False:
                     continue
                 for row in [
                     [canon,"protein_xref_uniprotkb", ac, obj["ecoid"], obj["comment"]]
@@ -3272,6 +4164,8 @@ def extract_ntdata_ds(species):
 
 def extract_site_annotation_uniprotkb_ds(species):
 
+
+    black_list = get_blacklisted_pmids(species)
 
     canon2genename = load_canon2genename(species)
 
@@ -3332,7 +4226,9 @@ def extract_site_annotation_uniprotkb_ds(species):
                     print "\"%s\""  % ("\",\"".join(row))
                     seen_row[row_str] = True
 
-                if pmid != "":
+                if pmid != "" and pmid.isdigit():
+                    if pmid in black_list:
+                        continue
                     row = [canon, gene_name,obj["anntype"], str(obj["start"]), str(obj["end"]),
                         obj["ann"], ecoid,ref_aa,alt_aa,"protein_xref_pubmed",pmid]
                     row_str = json.dumps(row)
@@ -3393,7 +4289,7 @@ def extract_pro_annotation_ds(species):
         for f in f_list:
             val = obj[f].strip().replace("\"", "") if f in obj else ""
             newrow.append(val)
-        if newrow[0] == "":
+        if newrow[0] == "" or newrow[2] == "":
             continue
         ac = obj["is_a"].strip().split(" ")[0].split(":")[1] if "is_a" in obj else ""
         if ac not in ac2canon:
@@ -3411,7 +4307,7 @@ def extract_go_annotation_ds(species):
     sparqlutil.load_go_annotation(data_grid, species)
     sparqlutil.load_genename(data_grid, species)
 
-
+    seen_row = {}
     row = ["uniprotkb_canonical_ac","gene_symbol", "go_term_id","go_term_label", "go_term_category", "eco_id", "pmid"]
     print "\"%s\""  % ("\",\"".join(row))
     for ac in ac2canon:
@@ -3421,7 +4317,10 @@ def extract_go_annotation_ds(species):
             for obj in data_grid["goann"][ac]:
                 row = [canon, gene_name, obj["goid"], obj["goterm"],obj["gocat"],
                         obj["ecoid"],obj["pmid"]]
-                print "\"%s\""  % ("\",\"".join(row))
+                row_str = json.dumps(row)
+                if row_str not in seen_row:
+                    seen_row[row_str] = True
+                    print "\"%s\""  % ("\",\"".join(row))
 
     return
 
@@ -3434,9 +4333,11 @@ def extract_transcriptlocus_ds(species):
 
     data_grid = {"ac2canon":{}, "isoformlist":{}, "isoforminfo":{}, "locusinfo":{}}
     sparqlutil.load_isoformlist(data_grid, species)
-    sparqlutil.load_locusinfo(data_grid, species)
+    sparqlutil.load_transcript_locusinfo(data_grid, species)
     sparqlutil.load_isoforminfo(data_grid, species)
 
+
+    seen = {}
     row = ["uniprotkb_canonical_ac","uniprotkb_isoform_ac","transcript_id","peptide_id","chromosome_id",
             "start_pos","end_pos","strand"]
     print "\"%s\""  % ("\",\"".join(row))
@@ -3444,32 +4345,34 @@ def extract_transcriptlocus_ds(species):
         if ac in ac2canon:
             canon = ac2canon[ac]
             for isoform in data_grid["isoformlist"][ac]:
+                #print "Robel", canon, isoform, isoform in data_grid["locusinfo"]
                 if isoform in data_grid["locusinfo"]:
                     o = data_grid["locusinfo"][isoform]
                     row = [canon,isoform,o["trsid"], o["pepid"],
                             str(o["chrid"]),str(o["startpos"]),str(o["endpos"]),str(o["strand"])]
-                    print "\"%s\"" % ("\",\"".join(row))
-
+                    row_str = json.dumps(row)
+                    if row_str not in seen:
+                        print "\"%s\"" % ("\",\"".join(row))
+                        seen[row_str] = True
 
 
 
 def extract_masterlist_ds(species):
-
 
     data_grid = {"ac2canon":{}, "isoformlist":{}, "genename":{}, "isoforminfo":{}}
     sparqlutil.load_isoformlist(data_grid, species)
     sparqlutil.load_genename(data_grid, species)
     sparqlutil.load_isoforminfo(data_grid, species)
 
-
-
     row = ["uniprotkb_canonical_ac","status","gene_name","reviewed_isoforms","unreviewed_isoforms"]
     print "\"%s\""  % ("\",\"".join(row))
 
     for ac in data_grid["isoformlist"]:
+        #print "Robel-1", ac, ac in data_grid["ac2canon"]
         gene_name = data_grid["genename"][ac] if ac in data_grid["genename"] else ""
         list_one, list_two = [], []
         for isoform in data_grid["isoformlist"][ac]:
+            #print "Robel-2", ac, isoform
             if data_grid["isoforminfo"][isoform]["reviewed"] == "1":
                 list_one.append(isoform)
             if data_grid["isoforminfo"][isoform]["reviewed"] == "0":
@@ -3500,7 +4403,6 @@ def extract_info_refseq_ds(species, tax_id):
         canon2refseq[canon] = refseq
         refseq2canon[refseq] = canon
 
-
     data_frame = {}
     field = "xxx"
     in_file = path_obj["downloads"] + "ncbi/refseq/current/refseq_protein_all_%s.gpff" % (tax_id)
@@ -3516,12 +4418,17 @@ def extract_info_refseq_ds(species, tax_id):
             newfield = line[0:12].strip() 
             field = newfield if len(newfield) > 0 else field
             value = line[12:].strip()
-            if field == "VERSION":
-                #ac = line.split(" ")[-1].strip()
-                ac = ".".join(line.split(" ")[-1].strip().split(".")[:-1])
-                if ac in refseq2canon:
-                    data_frame[ac] = {"ac":ac, "summary":""}
-                    flag = False
+            if field == "ACCESSION":
+            #if field == "VERSION":
+                tmp_ac_list = line.replace("ACCESSION", "").strip().split(" ")
+                for tmp_ac in tmp_ac_list:
+                    ac = tmp_ac
+                    if ac.find(".") != -1:
+                        ac = ".".join(tmp_ac.strip().split(".")[:-1])
+                    if ac in refseq2canon:
+                        data_frame[ac] = {"ac":ac, "summary":""}
+                        flag = False
+                        break
             elif field == "COMMENT":
                 if ac in refseq2canon:
                     if line.strip()[0:8] == "Summary:":
@@ -3532,29 +4439,43 @@ def extract_info_refseq_ds(species, tax_id):
                         data_frame[ac]["summary"] += line.strip() + " "
 
 
+    seen_row = {}
     row = ["uniprotkb_canonical_ac","p_refseq_ac_best_match","refseq_protein_name", "refseq_protein_length","refseq_protein_summary"]
     print "\"%s\"" % ("\",\"".join(row))
     for rec in SeqIO.parse(in_file, "genbank"):
-        #ac = rec.id
-        ac = ".".join(rec.id.split(".")[:-1])
-        if ac not in refseq2canon:
-            continue
-        for feat in rec.features:
-            if feat.type in ["Protein"]:
-                summary = data_frame[ac]["summary"]
-                summary = summary.replace("\"", "`")
-                summary = summary.replace("Summary: ", "")
-                product = feat.qualifiers["product"][0]
-                product = product.replace("\"", "`")
-                seq_len = len(str(rec.seq))
-                uniprotkb_canonical_ac = refseq2canon[ac]
-                row = [uniprotkb_canonical_ac, ac, product, str(seq_len), summary]
-                print "\"%s\"" % ("\",\"".join(row))
+        refseq_ac_list = [rec.id]
+        refseq_ac_list += rec.annotations["accessions"]
+        for ac in list(set(refseq_ac_list)):
+            ac_orig = ac
+            ac_one = ac.split(".")[0]
+            if ac.find(".") != -1:
+                ac = ".".join(ac.split(".")[:-1])
+            if ac not in refseq2canon:
+                continue
+            for feat in rec.features:
+                if feat.type in ["Protein"]:
+                    if ac not in data_frame:
+                        continue
+                    summary = data_frame[ac]["summary"]
+                    summary = summary.replace("\"", "`")
+                    summary = summary.replace("Summary: ", "")
+                    product = feat.qualifiers["product"][0]
+                    product = product.replace("\"", "`")
+                    seq_len = len(str(rec.seq))
+                    uniprotkb_canonical_ac = refseq2canon[ac]
+                    row = [uniprotkb_canonical_ac, ac, product, str(seq_len), summary]
+                    row_str = json.dumps(row)
+                    if row_str not in seen_row:
+                        print "\"%s\""  % ("\",\"".join(row))
+                        seen_row[row_str] = True
+
+    return
 
 
 
 def extract_genenames_refseq_ds(species):
 
+    seen_row = {}
     refseq2canon = {}
     canon2refseq = {}
     in_file = path_obj["unreviewed"] +  "%s_protein_xref_refseq.csv" % (species)
@@ -3571,43 +4492,37 @@ def extract_genenames_refseq_ds(species):
     row = ["uniprotkb_canonical_ac","refseq_ac", "refseq_gene_name"]
     print "\"%s\""  % ("\",\"".join(row))
 
+    seen_row = {}
     tax_id = species_obj[species]["tax_id"]
     in_file = path_obj["downloads"] + "ncbi/refseq/current/refseq_protein_all_%s.gpff" % (tax_id)
     if species in ["sarscov1", "sarscov2", "hcv1", "hcv2"]:
         in_file = path_obj["downloads"] + "ncbi/refseq/current/refseq_protein_all_viral.gpff"
     for record in SeqIO.parse(in_file, "genbank"):
-        #refseq = record.id
-        refseq = ".".join(record.id.split(".")[:-1])
-        if refseq not in refseq2canon:
-            continue
-        canon = refseq2canon[refseq]
-        for f in record.features:
-            if f.type == "CDS":
-                name_list = []
-                for q in ["gene", "gene_synonym"]:
-                    if q in f.qualifiers:
-                        for v in f.qualifiers[q]:
-                            name_list.append(v)
-                for refseq_gene_name in name_list:
-                    row = [canon, refseq, refseq_gene_name]
-                    print "\"%s\""  % ("\",\"".join(row))
-    
+        refseq_ac_list = [record.id]
+        refseq_ac_list += record.annotations["accessions"]
+        for refseq in list(set(refseq_ac_list)):
+            if refseq.find(".") != -1:
+                refseq = ".".join(refseq.split(".")[:-1])
+            if refseq not in refseq2canon:
+                continue
+            canon = refseq2canon[refseq]
+            for f in record.features:
+                if f.type == "CDS":
+                    name_list = []
+                    for q in ["gene", "gene_synonym"]:
+                        if q in f.qualifiers:
+                            for v in f.qualifiers[q]:
+                                name_list.append(v)
+                    for refseq_gene_name in name_list:
+                        row = [canon, refseq, refseq_gene_name]
+                        row_str = json.dumps(row)
+                        if row_str not in seen_row:
+                            seen_row[row_str] = True
+                            print "\"%s\""  % ("\",\"".join(row))
     return
 
 def extract_ncbi_linkouts_ds(species):
     
-
-    refseq_name_dict = {}
-    in_file = path_obj["unreviewed"] +  "%s_protein_proteinnames_refseq.csv" % (species)
-    data_frame = {}
-    libgly.load_sheet(data_frame, in_file, ",")
-    f_list = data_frame["fields"]
-    for row in data_frame["data"]:
-        refseq_ac = row[f_list.index("refseq_ac")]
-        refseq_name = row[f_list.index("refseq_protein_name")]
-        if refseq_ac not in refseq_name_dict:
-            refseq_name_dict[refseq_ac] = refseq_name
-
 
     newrow = ["ProviderId","Database","UID","URL","IconUrl","UrlName","SubjectType","Attribute"]
     print "%s"  % (",".join(newrow))
@@ -3620,7 +4535,6 @@ def extract_ncbi_linkouts_ds(species):
     for row in data_frame["data"]:
         canon = row[f_list.index("uniprotkb_canonical_ac")]
         refseq_ac = row[f_list.index("xref_id")]
-        refseq_name = refseq_name_dict[refseq_ac] if refseq_ac in refseq_name_dict else ""
         glygen_url = "https://glygen.org/protein/%s" % (canon.split("-")[0])
         if refseq_ac not in seen:
             newrow = ["10227","Protein",refseq_ac,glygen_url,"","","",""]
@@ -3630,28 +4544,11 @@ def extract_ncbi_linkouts_ds(species):
 
 
 
-def extract_proteinnames_refseq_ds(species):
 
-    refseqac2namelist = {}    
-    tax_id = species_obj[species]["tax_id"]
-    in_file = path_obj["downloads"] + "ncbi/refseq/current/refseq_protein_all_%s.gpff" % (tax_id)
-    if species in ["sarscov1", "sarscov2", "hcv1", "hcv2"]:
-        in_file = path_obj["downloads"] + "ncbi/refseq/current/refseq_protein_all_viral.gpff"
-                     
-    for record in SeqIO.parse(in_file, "genbank"):
-        refseq_ac = record.id.split(".")[0]
-        if refseq_ac not in refseqac2namelist:
-            refseqac2namelist[refseq_ac] = []
-        for f in record.features:
-            if f.type == "Protein":
-                for q in ["product", "note"]:
-                    if q in f.qualifiers:
-                        for v in f.qualifiers[q]:
-                            refseqac2namelist[refseq_ac].append(v)
 
-    row = ["uniprotkb_canonical_ac","refseq_ac", "refseq_protein_name"]
-    print "\"%s\""  % ("\",\"".join(row))
+def load_refseq2canon(species):
 
+    tmp_dict_one, tmp_dict_two = {}, {}
     in_file = path_obj["unreviewed"] +  "%s_protein_xref_refseq.csv" % (species)
     data_frame = {}
     libgly.load_sheet(data_frame, in_file, ",")
@@ -3660,11 +4557,59 @@ def extract_proteinnames_refseq_ds(species):
         canon = row[f_list.index("uniprotkb_canonical_ac")]
         refseq_isoform_ac = row[f_list.index("xref_id")]
         refseq_ac = refseq_isoform_ac.split(".")[0]
+        tmp_dict_one[refseq_ac] = canon
+        tmp_dict_two[refseq_isoform_ac] = canon
+
+
+    return tmp_dict_one, tmp_dict_two
+
+
+
+
+def extract_proteinnames_refseq_ds(species):
+
+
+
+    refseq_ac2canon, refseq_isoform2canon = load_refseq2canon(species)
+    
+    refseqac2namelist = {}    
+    tax_id = species_obj[species]["tax_id"]
+    in_file = path_obj["downloads"] + "ncbi/refseq/current/refseq_protein_all_%s.gpff" % (tax_id)
+    if species in ["sarscov1", "sarscov2", "hcv1", "hcv2"]:
+        in_file = path_obj["downloads"] + "ncbi/refseq/current/refseq_protein_all_viral.gpff"
+          
+    for record in SeqIO.parse(in_file, "genbank"):
+        refseq_ac_list = [record.id]
+        refseq_ac_list += record.annotations["accessions"]
+        for refseq_ac in list(set(refseq_ac_list)):
+            if refseq_ac.find(".") != -1:
+                refseq_ac = ".".join(refseq_ac.split(".")[:-1])
+            if refseq_ac not in refseq_ac2canon:
+                continue
+            if refseq_ac not in refseqac2namelist:
+                refseqac2namelist[refseq_ac] = []
+            for f in record.features:
+                if f.type == "Protein":
+                    for q in ["product", "note"]:
+                        if q in f.qualifiers:
+                            for v in f.qualifiers[q]:
+                                refseqac2namelist[refseq_ac].append(v)
+           
+    row = ["uniprotkb_canonical_ac","refseq_ac", "refseq_protein_name"]
+    print "\"%s\""  % ("\",\"".join(row))
+
+    seen_row = {}
+    for refseq_isoform_ac in refseq_isoform2canon:
+        refseq_ac = refseq_isoform_ac.split(".")[0]
         if refseq_ac in refseqac2namelist:
             if refseqac2namelist[refseq_ac] != []:
                 for refseq_name in refseqac2namelist[refseq_ac]:
+                    canon = refseq_isoform2canon[refseq_isoform_ac]
                     newrow = [canon, refseq_isoform_ac, refseq_name]
-                    print "\"%s\""  % ("\",\"".join(newrow))
+                    newrow_str = json.dumps(newrow)
+                    if newrow_str not in seen_row:
+                        print "\"%s\""  % ("\",\"".join(newrow))
+                        seen_row[newrow_str] = True
 
     return
 
@@ -3692,7 +4637,7 @@ def extract_function_refseq_ds(species, tax_id):
     if species in ["sarscov1", "sarscov2", "hcv1", "hcv2"]:
         in_file = path_obj["downloads"] + "ncbi/refseq/current/refseq_protein_all_viral.gpff"
     
-    #in_file = path_obj["downloads"] + "ncbi/refseq/2020_12/refseq_protein_all_9606.gpff-toy"
+    #in_file = "tmp/toy.gpff"
 
     cmd = "readlink -f " + in_file
     x = commands.getoutput(cmd)
@@ -3729,13 +4674,17 @@ def extract_function_refseq_ds(species, tax_id):
     row = ["uniprotkb_canonical_ac","refseq_ac", "xref_key", "xref_id", "annotation"]
     print "\"%s\""  % ("\",\"".join(row))
 
+    seen_row = {}
     for ac in data_frame:
         comment_summary = data_frame[ac]["comment_summary"].strip()
         if comment_summary != "" and ac in refseq2canon:
             uniprotkb_canonical_ac = refseq2canon[ac]
             ann = comment_summary
             row = [uniprotkb_canonical_ac, ac, "protein_xref_refseq", ac, ann]
-            print "\"%s\"" % ("\",\"".join(row))
+            row_str = json.dumps(row)
+            if row_str not in seen_row:
+                seen_row[row_str] = True
+                print "\"%s\"" % ("\",\"".join(row))
         for o in data_frame[ac]["references"]:
             if o["remark"].find("GeneRIF:") != -1:
                 o["remark"] = o["remark"][8:].strip()
@@ -3746,9 +4695,15 @@ def extract_function_refseq_ds(species, tax_id):
                 if ac in refseq2canon:
                     uniprotkb_canonical_ac = refseq2canon[ac]
                     row = [uniprotkb_canonical_ac, ac, "protein_xref_refseq",ac,ann]
-                    print "\"%s\"" % ("\",\"".join(row))
+                    row_str = json.dumps(row)
+                    if row_str not in seen_row:
+                        seen_row[row_str] = True
+                        print "\"%s\"" % ("\",\"".join(row))
                     row = [uniprotkb_canonical_ac, ac, "protein_xref_pubmed",pmid,ann]
-                    print "\"%s\"" % ("\",\"".join(row))
+                    row_str = json.dumps(row)
+                    if row_str not in seen_row:
+                        seen_row[row_str] = True
+                        print "\"%s\"" % ("\",\"".join(row))
 
     return
 
@@ -3764,6 +4719,11 @@ def extract_pathways_reactome_ds(species):
     print "\"%s\""  % ("\",\"".join(row))
 
     for row in row_list:
+        summary = ""
+        for line in row[2].split("\n"):
+            if line.strip() != "":
+                summary += line.strip() + " "
+        row[2] = summary.strip()
         print "\"%s\""  % ("\",\"".join(row))
 
     return
@@ -3803,7 +4763,7 @@ def extract_participants_reactome_ds(species):
         source = row[f_list.index("SOURCE")]
         if source != "GlyTouCan":
             continue
-        glytoucan_ac = row[f_list.index("ACCESSION_NUMBER")]
+        glytoucan_ac = row[f_list.index("ACCESSION_NUMBER")].strip()
         xref_id = row[f_list.index("COMPOUND_ID")]
         xref_key = "glycan_xref_chebi"
         if xref_id not in checbi2glytoucan:
@@ -3822,9 +4782,10 @@ def extract_participants_reactome_ds(species):
         for role in ["input", "output"]:
             for o in sheet_obj["participants"][reaction_id][role]:
                 name = o["name"].encode('ascii', 'ignore').decode('ascii')
-                tmprow = [
-                    reaction_id,o["id"], name, role, o["xrefid"], o["xreftype"]
-                ]
+                xref_type = o["xreftype"].encode('ascii', 'ignore').decode('ascii')
+                xref_id = o["xrefid"].encode('ascii', 'ignore').decode('ascii')
+                xref_id = xref_id.replace("\r", "").replace("\n", "")
+                tmprow = [reaction_id,o["id"], name, role, xref_id, xref_type]
                 print "\"%s\""  % ("\",\"".join(tmprow))
                 if o["xreftype"] == "ChEBI" and o["xrefid"] in checbi2glytoucan:
                     for glytoucan_ac in checbi2glytoucan[o["xrefid"]]:
@@ -3868,11 +4829,15 @@ def extract_reactions_reactome_ds(species):
                 pmid,
                 o["pathwayid"],
                 o["equation"],
-                o["summary"]
+                o["summary"].replace("\n", "; ")
             ]
             print "\"%s\""  % ("\",\"".join(tmprow))
 
     return
+
+
+
+
 
 def extract_reactions_rhea_ds(species):
 
@@ -3901,7 +4866,6 @@ def extract_reactions_rhea_ds(species):
 
 
 def extract_misc_ds(dataset, species):
-
 
     if dataset in ["cleaved_signal_peptide_sequence", "signal_peptide_sequence"]:
         in_file = "compiled/%s_protein_%s.fasta" % (species, dataset)
@@ -3943,7 +4907,6 @@ def extract_mutation_glycosylation_effect_ds(species, ds_name):
 
     fasta_file = "unreviewed/%s_protein_canonicalsequences.fasta" % (species)
     seq_hash = load_fasta_sequences(fasta_file)
-
     n_site_info = get_glycosylation_sites(species)
     is_o_site = load_o_glyco_sites(species)
     is_glycoprotein = {}
@@ -3990,7 +4953,7 @@ def extract_mutation_glycosylation_effect_ds(species, ds_name):
 
 def extract_media_file_ds(species, ds):
    
-    in_file = glob.glob("downloads/covid_media/%s_protein_%s*" % (species, ds))[0]
+    in_file = glob.glob("downloads/covid_media/current/%s_protein_%s*" % (species, ds))[0]
     cmd = "readlink -f " + in_file
     x = commands.getoutput(cmd)
     libgly.log_file_usage(x, "", "append")
@@ -4027,10 +4990,18 @@ def main():
     global species_obj
     global path_obj
     global ac2canon
+    global ac2canon_strict
+    global canon_dict
     global genename2canon
     global canon2genenames
+    global canon2geneid
     global canon2recname
+    global ds2bco
+    global DEBUG
 
+
+    DEBUG = False
+    #DEBUG = True
 
 
     species = options.species
@@ -4042,15 +5013,19 @@ def main():
     config_obj = json.loads(open("conf/config.json", "r").read())
     path_obj = config_obj["pathinfo"]
 
+    ds2bco = json.loads(open("generated/misc/ds2bco.json", "r").read())
     ac2canon = {}
+    canon2geneid = {}
     canon2genenames, genename2canon = {}, {}
-    canon2recnames = {}
-    
+    canon2recname = {}
+    canon_dict = {}
     if dataset != "masterlist":
-        ac2canon = load_ac2canon(species)
+        ac2canon, ac2canon_strict = load_ac2canon(species)
         canon2genenames, genename2canon = load_canon2genenames(species)
         canon2recname = load_canon2recname(species)
-
+        canon_dict = load_canon_dict(species)
+        canon2geneid = load_canon2geneid(species)
+    
     species_obj = {}
     in_file = config_obj["pathinfo"]["misc"]+ "/species_info.csv"
     libgly.load_species_info(species_obj, in_file)
@@ -4058,6 +5033,9 @@ def main():
    
     #start logging file usage
     libgly.log_file_usage("", dataset, "write")
+
+
+
 
     data_grid = {}
     if dataset == "masterlist":
@@ -4086,6 +5064,10 @@ def main():
         extract_citations_uniprotkb_ds(species)
     elif dataset == "citations_reactome":
         extract_citations_reactome_ds(species)
+    elif dataset in ["citations_mutation_germline", "citations_mutation_somatic",
+            "citations_mutation_literature", "citations_biomarkers",
+            "citations_matrixdb", "citations_iedb"]:
+        extract_citations_generic_ds(species, dataset)
     elif dataset == "disease_uniprotkb":
         extract_disease_uniprotkb_ds(species)
     elif dataset == "disease_genomics_england":
@@ -4117,7 +5099,7 @@ def main():
     elif dataset == "mutation_germline":
         extract_mutation_germline_ds(species)
     elif dataset == "mutation_literature":
-        extract_mutation_literature(species)
+        extract_mutation_literature_ds(species)
     elif dataset in ["mutation_cancer_glycoeffect", "mutation_somatic_glycoeffect",
             "mutation_germline_glycoeffect"]:
         extract_mutation_glycosylation_effect_ds(species, dataset)
@@ -4174,12 +5156,19 @@ def main():
         extract_ncbi_linkouts_ds(species)
     elif dataset == "mutation_cancer_glycosylation_loss":
         extract_mutation_cancer_glycosylation_loss_ds(species)
-    elif dataset == "biomarkers_cancer":
-        extract_biomarkers_cancer_ds(species)
+    elif dataset == "biomarkers":
+        extract_biomarkers_ds(species)
     elif dataset == "glycogenes":
         extract_glycogenes_ds(species)
+    elif dataset == "glycogenes_glycoenzonto":
+        extract_glycogenes_glycoenzonto_ds(species)
     elif dataset in ["swiss_gn2g2m3_speed2x_optimized", "swiss_gn2g2m3_speed2x"]:
         extract_media_file_ds(species, dataset)
+    elif dataset == "pdb_map":
+        extract_pdb_map_ds(species)
+    elif dataset == "iedb":
+        extract_iedb_ds(species)
+
 
 
     mol = "protein"

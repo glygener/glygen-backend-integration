@@ -3,8 +3,6 @@ import string
 from optparse import OptionParser
 import glob
 import json
-import pymongo
-from pymongo import MongoClient
 import subprocess
 import datetime
 
@@ -57,61 +55,42 @@ def main():
     wrk_dir = "/home/rykahsay/glygen-backend-integration/release-maker/"
 
     release_dir = "/data/shared/glygen/releases/data/v-%s/" % (ver)
-    #ftp_dir = "/data/shared/glygen/releases/ftp/v-%s/" % (ver)
-    ftp_dir = "/data/shared/glygen/releases/ftp/v-%s/" % ("x.x")
+    ftp_dir = "/data/shared/glyds/releases/ftp/v-%s/" % (ver)
 
 
     if os.path.isdir(ftp_dir) == True:
         cmd = "rm -rf %s" % (ftp_dir)
         x = subprocess.getoutput(cmd)
-
-    cmd = "mkdir  -p " + ftp_dir + "/dataset_files/"
+    
+    cmd = "mkdir -p " + ftp_dir
     x = subprocess.getoutput(cmd)
 
     cmd = "cp " + wrk_dir + "generated/misc/readme_ftp.txt " + ftp_dir + "/README.txt"
     x = subprocess.getoutput(cmd)
 
-    
-    row_list = get_dsfile2object_map_rows()
-    out_file = ftp_dir + "/dataset2object_map.csv"
-    with open(out_file, "w") as FW: 
-        for row in row_list:
-            FW.write("\"%s\"\n" % ("\",\"".join(row)))
-
-
-    file_list = glob.glob(release_dir + "/reviewed/*.*")
-    for path in file_list:
-        ignore = False
-        for k in ["GLY_0",".stat.csv"]:
-            if path.find(k) != -1:
-                ignore = True
-        if path[-3:] == ".nt":
-            ignore = True
-        if ignore == True:
-            continue
-        cmd = "cp %s %s/dataset_files/" % (path, ftp_dir)
-        x = subprocess.getoutput(cmd)
-    
-
-    os.chdir(ftp_dir)
-    cmd = "tar cvf dataset_files.tar dataset_files"
-    x = subprocess.getoutput(cmd)
-    cmd = "gzip dataset_files.tar"
-    x = subprocess.getoutput(cmd)
-    cmd = "rm -rf dataset_files"
-    x = subprocess.getoutput(cmd)
-
-
-    d_list = [
-        "bcodb", "glycandb", "motifdb", "speciesdb", "diseasedb", 
-        "proteindb", "alignmentdb","networkdb","publicationdb","sitedb"
-    ]
     os.chdir(release_dir + "/jsondb/")
+    d_list = glob.glob("*")
+    os.chdir(release_dir)
     for d in d_list:
-        cmd = "tar cvf %s/%s.tar %s" % (ftp_dir,d, d)
+        if d[-2:] != "db":
+            continue
+        cmd = "tar cvf %s/%s.tar jsondb/%s" % (ftp_dir, d, d)
         x = subprocess.getoutput(cmd)
-        cmd = "gzip %s/%s.tar" % (ftp_dir,d)
+        cmd = "gzip %s/%s.tar" % (ftp_dir, d)
         x = subprocess.getoutput(cmd)
+        print ("finished %s" % (d)) 
+
+    d_list = ["reviewed", "compiled", "misc"]
+    for d in d_list:
+        cmd = "tar cvf %s/%s.tar %s" % (ftp_dir, d, d)
+        x = subprocess.getoutput(cmd)
+        cmd = "gzip %s/%s.tar" % (ftp_dir, d)
+        x = subprocess.getoutput(cmd)
+        print ("finished %s" % (d))
+
+
+
+
 
 
 

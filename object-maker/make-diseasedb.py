@@ -11,36 +11,72 @@ from Bio.Seq import Seq
 
 
 import libgly
+import csvutil
 
 
-def load_dictionaries(map_dict, misc_dir):
 
-    dict_list_obj = json.loads(open("conf/protein_dictionaries.json", "r").read())
-    for dict_name in dict_list_obj:
-        map_dict[dict_name] = {}
-        ind_list = dict_list_obj[dict_name]["indexlist"]
-        for pattern in dict_list_obj[dict_name]["fileglob"]:
-            for in_file in glob.glob(misc_dir + pattern):
-                sheet_obj = {}
-                libgly.load_sheet(sheet_obj, in_file, ",")
-                for row in sheet_obj["data"]:
-                    if row ==[] or row[ind_list[0]][0] == "#":
-                        continue
-                    key = row[ind_list[0]]
-                    val = row[ind_list[1]]
-                    if key not in map_dict[dict_name]:
-                        map_dict[dict_name][key] = []
-                    map_dict[dict_name][key].append(val)
+def get_children_tree(p_id):
 
-    return
+    obj_list = [] 
+    if p_id in tree_dict:
+        for c_id in tree_dict[p_id]:
+            name = name_dict[c_id] if c_id in name_dict else ""
+            o = {"id":c_id, "label":name, "children":[]}
+            o["children"] = get_children_tree(c_id)
+            #if o["children"] == []:
+            #    o.pop("children")
+            obj_list.append(o)
+         
+
+    return obj_list
+
+
+
+def get_flat_dict(p_id):
+        
+    name = name_dict[p_id] if p_id in name_dict else ""
+    o = {"id":p_id, "label":name}
+    obj_list = [o]
+    if p_id in tree_dict:
+        for c_id in tree_dict[p_id]:
+            name = name_dict[c_id] if c_id in name_dict else ""
+            o = {"id":c_id, "label":name}
+            obj_list.append(o)
+            obj_list += get_flat_dict(c_id)
+
+    return obj_list
+
+
+def load_tree_dict():
+
+    name_dict = {}
+    tree_dict = {}
+    data_frame = {}
+    in_file = "reviewed/protein_disease_tree.csv"
+    libgly.load_sheet(data_frame, in_file, ",")
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        c_id = row[f_list.index("disease_id")].replace("DOID_", "DOID:")
+        c_name = row[f_list.index("disease_name")]
+        p_id = row[f_list.index("parent_disease_id")].replace("DOID_", "DOID:")
+        p_name = row[f_list.index("parent_disease_name")]
+        name_dict[c_id] = c_name
+        name_dict[p_id] = p_name
+        if p_id not in tree_dict:
+            tree_dict[p_id] = {}
+        tree_dict[p_id][c_id] = True
+
+
+    return tree_dict, name_dict
+
+
 
 
 def load_disease_idmap():
 
     map_dict = {}
-    load_dictionaries(map_dict, "generated/misc/")
+    csvutil.load_dictionaries(map_dict, "generated/misc/")
     
-
 
 
     master_dict = {}
@@ -148,8 +184,9 @@ def load_disease_idmap():
         if main_id.find("DOID:") != -1:
             do_id = main_id
             xref_key = "protein_xref_do"
-            xref_url = map_dict["xrefkey2url"][xref_key][0] % (do_id.split(":")[1])
-            xref_badge = map_dict["xrefkey2badge"][xref_key][0]
+            xref_id = do_id.split(":")[1]
+            xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+            xref_badge = libgly.get_xref_badge(map_dict,xref_key)
             if do_id in rec_name_dict:
                 final_dict[main_id] = {"disease_id":do_id, "recommended_name":{}, "synonyms": []}
                 for name in rec_name_dict[do_id]:
@@ -169,8 +206,9 @@ def load_disease_idmap():
                 for mapped_id in disease_idmap[do_id]["do2mondo"]:
                     if mapped_id in rec_name_dict:
                         xref_key = "protein_xref_mondo"
-                        xref_url = map_dict["xrefkey2url"][xref_key][0] % (mapped_id.split(":")[1])
-                        xref_badge = map_dict["xrefkey2badge"][xref_key][0]
+                        xref_id = mapped_id.split(":")[1]
+                        xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+                        xref_badge = libgly.get_xref_badge(map_dict,xref_key)
                         for name in rec_name_dict[mapped_id]:
                             desc = rec_name_dict[mapped_id][name]
                             o = {"id":mapped_id, "resource":xref_badge,"url":xref_url,  
@@ -186,8 +224,9 @@ def load_disease_idmap():
                 for mapped_id in disease_idmap[do_id]["do2mim"]:
                     if mapped_id in rec_name_dict:
                         xref_key = "protein_xref_omim"
-                        xref_url = map_dict["xrefkey2url"][xref_key][0] % (mapped_id.split(":")[1])
-                        xref_badge = map_dict["xrefkey2badge"][xref_key][0]
+                        xref_id = mapped_id.split(":")[1]
+                        xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+                        xref_badge = libgly.get_xref_badge(map_dict,xref_key)
                         for name in rec_name_dict[mapped_id]:
                             desc = rec_name_dict[mapped_id][name]
                             o = {"id":mapped_id, "resource":xref_badge,"url":xref_url,
@@ -205,8 +244,9 @@ def load_disease_idmap():
             mondo_id = main_id
             if mondo_id in rec_name_dict:
                 xref_key = "protein_xref_mondo"
-                xref_url = map_dict["xrefkey2url"][xref_key][0] % (mondo_id.split(":")[1])
-                xref_badge = map_dict["xrefkey2badge"][xref_key][0]
+                xref_id = mondo_id.split(":")[1]
+                xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+                xref_badge = libgly.get_xref_badge(map_dict,xref_key)
                 final_dict[main_id] = {"disease_id":mondo_id, "recommended_name":{}, "synonyms": []}
                 for name in rec_name_dict[mondo_id]:
                     desc = rec_name_dict[mondo_id][name]
@@ -223,8 +263,9 @@ def load_disease_idmap():
                 for mapped_id in disease_idmap[mondo_id]["mondo2mim"]:
                     if mapped_id in rec_name_dict:
                         xref_key = "protein_xref_omim"
-                        xref_url = map_dict["xrefkey2url"][xref_key][0] % (mapped_id.split(":")[1])
-                        xref_badge = map_dict["xrefkey2badge"][xref_key][0]
+                        xref_id = mapped_id.split(":")[1]
+                        xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+                        xref_badge = libgly.get_xref_badge(map_dict,xref_key)
                         for name in rec_name_dict[mapped_id]:
                             desc = rec_name_dict[mapped_id][name]
                             o = {"id":mapped_id, "resource":xref_badge,"url":xref_url,
@@ -241,8 +282,9 @@ def load_disease_idmap():
             mim_id = main_id
             if mim_id in rec_name_dict:
                 xref_key = "protein_xref_omim"
-                xref_url = map_dict["xrefkey2url"][xref_key][0] % (mim_id.split(":")[1])
-                xref_badge = map_dict["xrefkey2badge"][xref_key][0]
+                xref_id = mim_id.split(":")[1]
+                xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+                xref_badge = libgly.get_xref_badge(map_dict,xref_key)
                 final_dict[main_id] = {"disease_id":mim_id, "recommended_name":{}, "synonyms": []}
                 for name in rec_name_dict[mim_id]:
                     desc = rec_name_dict[mim_id][name]
@@ -269,27 +311,60 @@ def main():
     global species_obj
     global map_dict
     global data_dir
-    global misc_dir
     global main_dict
+    global tree_dict
+    global name_dict
 
 
     config_file = "../conf/config.json"
     config_obj = json.loads(open(config_file, "r").read())
     path_obj  =  config_obj[config_obj["server"]]["pathinfo"]
 
+    path_obj["reviewed"] = "reviewed/"
+
+    
+    global is_cited
+
+
+
+    tree_dict, name_dict = load_tree_dict()
+
+    flat_dict = {}    
+    children_dict = {}
+    for p_id in tree_dict:
+        children_dict[p_id] = get_children_tree(p_id)
+        flat_dict[p_id] = get_flat_dict(p_id)
+
+
+
+    is_cited = libgly.get_is_cited()
+
+
     data_dir = "reviewed/"
-    misc_dir = "generated/misc/"
 
     final_dict = load_disease_idmap()
     record_count = 0
-    for main_id in final_dict:
-        out_file = "jsondb/diseasedb/%s.json" % (main_id.replace(":",".").lower())
+    main_id_list = list(final_dict.keys())
+    for main_id in main_id_list:
+        name = final_dict[main_id]["recommended_name"]["name"]
+        final_dict[main_id]["children"] = children_dict[main_id] if main_id in children_dict else []
+        id_list, name_list = [main_id], [name]
+        if main_id in flat_dict:
+            for o in flat_dict[main_id]:
+                id_list.append(o["id"])
+                name_list.append(o["label"])
+        
+        final_dict[main_id]["id_list"] = list(set(id_list))
+        final_dict[main_id]["name_list"]  = list(set(name_list))
+        out_file = "jsondb/interm/diseasedb/%s.json" % (main_id.replace(":",".").lower())
         with open(out_file, "w") as FW:
             FW.write("%s\n" % (json.dumps(final_dict[main_id], indent=4)))
         record_count += 1
 
-    print ("make-diseasedb: final created: %s disease objects" % (record_count))
 
+    log_file = "logs/make-diseasedb.log"
+    msg = "make-diseasedb: final created: %s disease objects" % (record_count)
+    csvutil.write_log_msg(log_file, msg, "w")
 
 
 

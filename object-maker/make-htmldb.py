@@ -6,6 +6,9 @@ import json
 import glob
 import requests
 import subprocess
+import csvutil
+
+
 
 def main():
 
@@ -14,8 +17,14 @@ def main():
     global data_rel
 
     global wrk_dir
-    wrk_dir = "/home/rykahsay/glygen-backend-integration/object-maker"
-    file_list = glob.glob("%s/html/*.html" % (wrk_dir))
+    wrk_dir = "/data/shared/repos/glygen-backend-integration/object-maker/"
+    file_list = glob.glob("%s/generated/html/*.html" % (wrk_dir))
+    
+    
+    log_file = "logs/make-htmldb.log"
+    msg = "make-htmldb: started logging"
+    csvutil.write_log_msg(log_file, msg, "w")
+
     for in_file in file_list:
         page_id = in_file.split("/")[-1].split(".")[0]
         cn = open(in_file, "r").read();
@@ -23,8 +32,9 @@ def main():
         out_file = wrk_dir + "/jsondb/htmldb/%s.json" % (page_id)
         with open(out_file,"w") as FW:
             FW.write("%s\n" % (json.dumps(doc, indent=4)))
-        print ("created jsondb/htmldb/%s.json" % (page_id))
-    
+        msg = "created jsondb/htmldb/%s.json" % (page_id)
+        csvutil.write_log_msg(log_file, msg, "a")
+
     cmd = "chmod -R 775 " + wrk_dir + "/jsondb/htmldb"
     x, y = subprocess.getstatusoutput(cmd)
 

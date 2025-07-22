@@ -9,7 +9,12 @@ import libgly
 
 
 def main():
-    
+
+    in_file = "downloads/glytoucan/current/export/glycoctxml.zip.00"
+    with open(in_file, 'r') as f:
+         print(f.readlines())
+    exit()
+ 
     bin_list = [{"s":0, "e":0}]
     for i in range(0, 100):
         o = {"s":i*100 + 1, "e":(i+1)*100}

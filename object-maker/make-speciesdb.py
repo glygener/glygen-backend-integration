@@ -11,6 +11,7 @@ from Bio.Seq import Seq
 
 
 import libgly
+import csvutil
 
 
 def main():
@@ -20,7 +21,6 @@ def main():
     global species_obj
     global map_dict
     global data_dir
-    global misc_dir
     global main_dict
 
 
@@ -29,7 +29,12 @@ def main():
     path_obj  =  config_obj[config_obj["server"]]["pathinfo"]
 
     data_dir = "reviewed/"
-    misc_dir = "generated/misc/"
+
+    
+    species_obj = {}
+    in_file = "generated/misc/species_info.csv"
+    libgly.load_species_info(species_obj, in_file)
+
 
 
     record_count = 0
@@ -40,14 +45,21 @@ def main():
         doc = json.loads(open(in_file,"r").read())
         for o in doc["species"]:
             combo_id = o["taxid"]
+            tax_id = str(combo_id)
+            if tax_id in species_obj:
+                if species_obj[tax_id]["is_reference"] == "no":
+                    continue
             if combo_id not in seen_species:
                 seen_species[combo_id] = True
-                out_file = path_obj["jsondbpath"] + "/speciesdb/%s.json" % (combo_id)
+                out_file = "jsondb/speciesdb/%s.json" % (combo_id)
                 with open(out_file, "w") as FW:
                     FW.write("%s\n" % (json.dumps(o, indent=4)))
                     record_count += 1 
     
-    print ("make-speciesdb: final created: %s species objects" % (record_count))
+    log_file = "logs/make-speciesdb.log"
+    msg = "make-speciesdb: final created: %s species objects" % (record_count)
+    csvutil.write_log_msg(log_file, msg, "w")
+
 
 
 

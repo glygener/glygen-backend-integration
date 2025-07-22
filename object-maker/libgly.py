@@ -2,8 +2,64 @@ import os
 import csv
 import json
 import time
-#import commands
+import glob
 import subprocess
+
+debug_dict = {}
+
+
+def get_is_cited():
+
+    is_cited = {}
+    file_list = glob.glob("reviewed/*_citations*.csv")
+
+    idx = 0
+    for in_file in file_list:
+        if in_file.find(".stat.csv") != -1:
+            continue
+        idx += 1
+        data_frame = {}
+        load_sheet(data_frame, in_file, ",")
+        f_list = data_frame["fields"]
+        for row in data_frame["data"]:
+            xref_key, xref_id = row[f_list.index("xref_key")], row[f_list.index("xref_id")]
+            if xref_key.split("_")[-1] not in ["pubmed","doi"]:
+                continue
+            is_cited[xref_id] = True
+    return is_cited
+
+
+
+
+
+def get_xref_badge(map_dict, xref_key):
+    xref_badge = ""
+    if xref_key in map_dict["xrefkey2badge"]:
+        xref_badge = map_dict["xrefkey2badge"][xref_key][0]
+    return xref_badge
+
+
+def get_xref_url(map_dict, xref_key, xref_id, is_cited):
+
+
+    if xref_key.find("_xref_pubmed") != -1 and xref_id not in is_cited:
+        return ""
+
+
+    xref_url= ""
+    if xref_key in map_dict["xrefkey2url"]:
+        xref_url = map_dict["xrefkey2url"][xref_key][0]
+        if xref_url == "DISABLED":
+            xref_url= ""
+        if xref_url.find("%s") != -1:
+            xref_url = map_dict["xrefkey2url"][xref_key][0] % (xref_id)
+    
+    if xref_url == "" and xref_key not in debug_dict:
+        debug_dict[xref_key] = True
+
+    
+    return xref_url
+
 
 
 def log_file_usage(in_file, ds, flag):
@@ -89,6 +145,8 @@ def load_sheet_as_dict(sheet_obj, in_file, separator, anchor_field):
             else:
                 if len(f_list) != len(row):
                     continue
+                if anchor_field not in f_list:
+                    continue
                 new_row = []
                 for j in range(0, len(row)):
                     if f_list[j] == anchor_field:
@@ -108,7 +166,7 @@ def load_sheet(sheet_obj, in_file, separator):
     cmd = "readlink -f " + in_file
     #x = commands.getoutput(cmd)
     x = subprocess.getoutput(cmd)
-    log_file_usage(x, "", "append")
+    #log_file_usage(x, "", "append")
 
 
     #import sys

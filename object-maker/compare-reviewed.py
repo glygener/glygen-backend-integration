@@ -23,7 +23,7 @@ def main():
 
     usage = "\n%prog  [options]"
     parser = OptionParser(usage,version="%prog version___")
-    parser.add_option("-v","--ver",action="store",dest="ver",help="New version")
+    parser.add_option("-v","--ver",action="store",dest="ver",help="Old version")
 
     (options,args) = parser.parse_args()
     for key in ([options.ver]):
@@ -33,7 +33,7 @@ def main():
 
     global wrk_dir 
     old_rel = options.ver
-    wrk_dir = "/home/rykahsay/glygen-backend-integration/object-maker"
+    wrk_dir = "/data/shared/repos/glygen-backend-integration/object-maker/"
     old_path_list = glob.glob("/data/shared/glygen/releases/data/v-%s/reviewed/*.*" % (old_rel))
     new_path_list = glob.glob(wrk_dir + "/reviewed/*.*")
 

@@ -8,11 +8,12 @@ import glob
 from collections import OrderedDict
 from Bio import SeqIO
 from Bio.Seq import Seq
-import commands
+import subprocess
 
 
 sys.path.append('../../glytools/')
 import libgly
+import csvutil
 
 
 def main():
@@ -30,7 +31,7 @@ def main():
 
 
     species_obj = {}
-    in_file = path_obj["misc"]+ "/species_info.csv"
+    in_file = "generated/misc/species_info.csv"
     libgly.load_species_info(species_obj, in_file)
     species_list = []
     for k in species_obj:
@@ -38,27 +39,31 @@ def main():
         if obj["short_name"] not in species_list and obj["is_reference"] == "yes":
             species_list.append(obj["short_name"])
 
-    cmd = "rm -f blastdb/*"
-    x = commands.getoutput(cmd)
+    out_dir = "jsondb/blastdb"
+    #out_dir = "generated/datasets/blastdb"
+    #cmd = "rm -f %s*" % (out_dir)
+    #x = subprocess.getoutput(cmd)
 
     prg = "/software/ncbi-blast-2.6.0+/bin/makeblastdb"
-    for species in species_list:
-        src = "reviewed/%s_protein_canonicalsequences.fasta" % (species)
-        dst = "blastdb/canonicalsequences_%s.fasta" % (species)
-        out = "blastdb/canonicalsequences_%s" % (species)
-        cmd = "cp " + src + " " + dst
-        x = commands.getoutput(cmd)
-        
+    for seqset in ["canonical", "all"]:
+        for species in species_list:
+            src = "reviewed/%s_protein_%ssequences.fasta" % (species,seqset)
+            dst = out_dir + "/%ssequences_%s.fasta" % (seqset,species)
+            out = out_dir + "/%ssequences_%s" % (seqset, species)
+            cmd = "cp " + src + " " + dst
+            x = subprocess.getoutput(cmd)
+            cmd = "%s -in %s -out %s -parse_seqids -dbtype prot" % (prg, dst, out)
+            x = subprocess.getoutput(cmd)
+        cmd = "cat %s/%ssequences_*.fasta > %s/%ssequences_all.fasta" % (out_dir,seqset,out_dir,seqset)
+        x = subprocess.getoutput(cmd)
+        dst = out_dir + "/%ssequences_all.fasta" % (seqset)
+        out = out_dir + "/%ssequences_all" % (seqset)
         cmd = "%s -in %s -out %s -parse_seqids -dbtype prot" % (prg, dst, out)
-        x = commands.getoutput(cmd)
+        x = subprocess.getoutput(cmd)
 
-    cmd = "cat blastdb/canonicalsequences_*.fasta > blastdb/canonicalsequences_all.fasta"
-    x = commands.getoutput(cmd)
-    
-    dst = "blastdb/canonicalsequences_all.fasta"
-    out = "blastdb/canonicalsequences_all"
-    cmd = "%s -in %s -out %s -parse_seqids -dbtype prot" % (prg, dst, out)
-    x = commands.getoutput(cmd)
+    log_file = "logs/make-blastdb.log"
+    msg = "make-blastdb: created blast files"
+    csvutil.write_log_msg(log_file, msg, "w")
 
 
 

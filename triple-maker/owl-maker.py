@@ -43,7 +43,7 @@ def main():
     #rdf
 
 
-    in_file = "generated/datamodel/datamodel.csv"
+    in_file = "generated/datamodel/datamodel_decoupled.csv"
     seen = {"cls":{}, "prd":{}}
     with open(in_file, "r") as FR:
         for line in FR:

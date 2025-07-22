@@ -11,6 +11,7 @@ from Bio.Seq import Seq
 
 
 import libgly
+import csvutil
 
 
 
@@ -31,10 +32,13 @@ def main():
     for row in data_frame["data"]:
         out_obj["aclist"].append(row[0])
 
-    out_file = path_obj["jsondbpath"] + "/glytoucandb/glytoucandb.json"
+    out_file = "jsondb/glytoucandb/glytoucandb.json"
     with open(out_file, "w") as FW:
         FW.write("%s\n" % (json.dumps(out_obj, indent=4)))
-    print ("make-glytoucandb: final created: %s glytoucandb objects" % (1))
+
+    msg = "make-glytoucandb: final created: %s glytoucandb objects" % (1)
+    log_file = "logs/make-glytoucandb.log"
+    csvutil.write_log_msg(log_file, msg, "w")
 
 
 if __name__ == '__main__':

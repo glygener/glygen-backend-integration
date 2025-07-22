@@ -11,6 +11,10 @@ from Bio.Seq import Seq
 
 
 import libgly
+import csvutil
+import section_stats
+
+
 
 
 
@@ -47,47 +51,8 @@ def load_motif_glytoucan_ac_list():
     return seen.keys()
 
 
-def load_species_info(species_obj, species_list):
-
-    seen = {}
-    in_file = path_obj["misc"]+ "/species_info.csv"
-    libgly.load_species_info(species_obj, in_file)
-    species_obj_list = []
-    for k in sorted(species_obj, reverse=True):
-        obj = species_obj[k]
-        if obj["short_name"] not in seen and obj["is_reference"] == "yes":
-            o = {"shortname":obj["short_name"], "sortorder":obj["sort_order"]}
-            species_obj_list.append(o)
-            seen[obj["short_name"]] = True
-
-    species_obj_list.sort(key=get_sorting_key)
-    for o in species_obj_list:
-        species_list.append(o["shortname"])
 
 
-    return
-
-
-def load_dictionaries(map_dict, misc_dir):
-
-    dict_list_obj = json.loads(open("conf/glycan_dictionaries.json", "r").read())
-    for dict_name in dict_list_obj:
-        map_dict[dict_name] = {}
-        ind_list = dict_list_obj[dict_name]["indexlist"]
-        for pattern in dict_list_obj[dict_name]["fileglob"]:
-            for in_file in glob.glob(misc_dir + pattern):
-                sheet_obj = {}
-                libgly.load_sheet(sheet_obj, in_file, ",")
-                for row in sheet_obj["data"]:
-                    if row ==[] or row[ind_list[0]][0] == "#":
-                        continue
-                    key = row[ind_list[0]]
-                    val = row[ind_list[1]]
-                    if key not in map_dict[dict_name]:
-                        map_dict[dict_name][key] = []
-                    map_dict[dict_name][key].append(val)
-
-    return
 
 
 
@@ -129,11 +94,11 @@ def load_property_objlist(tmp_obj_dict,in_file, prop_dict,xref_info, combo_flist
                         database_label = tmp_row[tmp_fl.index("database_label")]
                         do_name = "%s [%s disease name]" % (database_label, xref_badge)
                         obj_one["name"] = do_name
-                        obj_one["url"] = map_dict["xrefkey2url"]["protein_xref_do_placeholder"][0]
+                        obj_one["url"] = libgly.get_xref_url(map_dict, "protein_xref_do_placeholder", "",is_cited)
                     else:
                         do_name = doid2name[do_id][0]
                         obj_one["name"] = do_name[0].upper() + do_name[1:] + " [DO disease name]"
-                        obj_one["url"] = map_dict["xrefkey2url"]["protein_xref_do"][0] % (do_id)
+                        obj_one["url"] = libgly.get_xref_url(map_dict, "protein_xref_do", do_id,is_cited)
                         if "protein_xref_icd10cm" in doid2xrefid[do_id]:
                             obj_one["icd10"] = doid2xrefid[do_id]["protein_xref_icd10cm"][0]
 
@@ -148,10 +113,8 @@ def load_property_objlist(tmp_obj_dict,in_file, prop_dict,xref_info, combo_flist
                 xref_key = tmp_row[tmp_fl.index(xref_info[0])]
                 xref_id = tmp_row[tmp_fl.index(xref_info[1])]
                 xref_id = main_id if xref_id.strip() == "" else xref_id
-                xref_badge = map_dict["xrefkey2badge"][xref_key][0]
-                xref_url = map_dict["xrefkey2url"][xref_key][0]
-                if map_dict["xrefkey2url"][xref_key][0].find("%s") != -1:
-                    xref_url = map_dict["xrefkey2url"][xref_key][0] % (xref_id)
+                xref_badge = libgly.get_xref_badge(map_dict, xref_key)
+                xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
                 obj_two = {"database":xref_badge, "id":xref_id, "url":xref_url}
                 combo_id_xref = combo_id
                 for f in combo_flist_two:
@@ -213,10 +176,8 @@ def main():
 
     global config_obj
     global path_obj
-    global species_obj
     global map_dict
     global data_dir
-    global misc_dir
     global main_dict
 
 
@@ -225,89 +186,59 @@ def main():
     path_obj  =  config_obj[config_obj["server"]]["pathinfo"]
 
     data_dir = "reviewed/"
-    misc_dir = "generated/misc/"
 
 
-    DEBUG = True
-    #DEBUG = False
+    global is_cited
+    is_cited = libgly.get_is_cited()
 
-    file_name_list = []
-    ds_obj_list = json.loads(open(misc_dir + "/dataset-masterlist.json", "r").read())
-    for obj in ds_obj_list:
-        ds_name = obj["name"]
-        ds_format = obj["format"]
-        mol = obj["categories"]["molecule"]
-        #if mol == "proteoform":
-        #    continue
-        if ds_name in ["homolog_alignments", "isoform_alignments"]:
-            continue
-        if obj["categories"]["species"] == []:
-            if obj["integration_status"]["status"] == "integrate_all":
-                if "glycan" in obj["target_objects"]:
-                    file_name_list.append("%s_%s" % (mol, ds_name))
-        else:
-            sp_list_one = sorted(obj["categories"]["species"])
-            for species in sp_list_one:
-                if species not in obj["integration_status"]["excludelist"]:
-                    if "glycan" in obj["target_objects"]:
-                        file_name_list.append("%s_%s_%s" % (species, mol, ds_name))
-    
 
-        
+    expected_dslist = []
+    sec_info = json.loads(open("generated/misc/motif_sectioninfo.json", "r").read())
+    expected_dslist =  csvutil.get_expected_dslist("motif", [], {})
+    #print (json.dumps(expected_dslist, indent=4))
+    #print (len(expected_dslist))
+    #exit()
+
     residue_heirarchy = json.loads(open("generated/misc/residue_heirarchy.json", "r").read())
     residue2class = {}
     for c in residue_heirarchy:
         for m in residue_heirarchy[c]:
             residue2class[m] = c
-
-
-    
-    sec_info = json.loads(open("generated/misc/motif_sectioninfo.json", "r").read())
     
     main_dict = {}
     for sec in sec_info:
         main_dict[sec] = {"seen":{}}
 
-
-    species_obj, species_list = {}, []
-    load_species_info(species_obj, species_list)
-
     map_dict = {}
-    load_dictionaries(map_dict, misc_dir)
-
-
-    pattern_list = []
-    if sec_name != None:
-        pattern_list += sec_info[sec_name]["sheetlist"]
-    else:
-        for sec in sec_info:
-            pattern_list += sec_info[sec]["sheetlist"]
-    pattern_list = list(set(pattern_list))
-
+    csvutil.load_dictionaries(map_dict, "generated/misc/")
+   
 
     motif_glytoucan_ac_list = load_motif_glytoucan_ac_list()
-
-
     record_stat = {}
     glycan_type_dict = {}
-    
-
     motif_name_dict = {}
-
-    
     main_obj_dict = {}
-    for file_name in file_name_list:
-        cond_list = []
-        for pat in ["_protein_masterlist"] + pattern_list:
-            cond_list += [file_name.find(pat) != -1]
-        if DEBUG and list(set(cond_list)) == [False]:
-            continue
+   
+
+
+    biomarker_dict = csvutil.get_biomarker_dict("glycan") 
+    
+
+    log_file = "logs/make-motifdb.log"
+    msg = "make-motifdb: started logging"
+    csvutil.write_log_msg(log_file, msg, "w")
+
+    file_idx, file_count = 1, len(expected_dslist) 
+    for file_name in expected_dslist:
         in_file = "%s%s.csv" % (data_dir,file_name)
         if os.path.isfile(in_file) == False:
-            print ("make-motifdb: file %s does NOT exist!" % (in_file))
+            msg = "make-motifdb: file %s does NOT exist!" % (in_file)
+            csvutil.write_log_msg(log_file, msg, "a")
             sys.exit()
-  
-        print ("make-motifdb:", in_file)
+
+        msg = "make-motifdb: %s [%s/%s]" % (in_file, file_idx, file_count)
+        csvutil.write_log_msg(log_file, msg, "a")
+        file_idx += 1
 
         #--> glytoucan_ac
         sheet_name = "glycan_masterlist"
@@ -380,14 +311,29 @@ def main():
                         update_record_stat(record_stat, file_name, p, 1,combo_list)
                         if field == "sequence_inchi":
                             inchi_key = tmp_row[tmp_fl.index("inchi_key")]
-                            url = map_dict["xrefkey2url"]["glycan_xref_inchi_key"][0]
-                            url = url % (inchi_key)
+                            url = libgly.get_xref_url(map_dict, "glycan_xref_inchi_key", inchi_key, is_cited)
                             o = {"key":inchi_key, "url":url}
                             main_dict["inchi_key"][main_id] = o
                             combo_list = ["glytoucan_ac", field]
                             update_record_stat(record_stat, file_name, "inchi_key", 1, combo_list)
         
-        
+        #--> biomarkers
+        for sheet_name in ["glycan_biomarkers"]:
+            if file_name.find(sheet_name) != -1:
+                prop_name = "biomarkers"
+                load_obj = main_dict[prop_name]
+                data_frame = {}
+                libgly.load_sheet_as_dict(data_frame, in_file, ",", "glytoucan_ac")
+                tmp_fl = data_frame["fields"]
+                for main_id in data_frame["data"]:
+                    #print (main_id, main_id in biomarker_dict)
+                    if main_id in biomarker_dict:
+                        for doc in biomarker_dict[main_id]:
+                            combo_id = "%s|%s" % (main_id, doc["biomarker_id"])
+                            if "aclist" in doc:
+                                doc.pop("aclist")
+                            load_obj[combo_id] = doc
+ 
         
         #--> dictionary
         for sheet_name in ["glycan_dictionary"]:
@@ -407,8 +353,8 @@ def main():
                         o["synonymns"] = o["synonymns"].split("|")  
                         xref_id = tmp_row[tmp_fl.index("xref_id")]
                         xref_key = tmp_row[tmp_fl.index("xref_key")]
-                        xref_badge = map_dict["xrefkey2badge"][xref_key][0]
-                        xref_url = map_dict["xrefkey2url"][xref_key][0] % (xref_id)
+                        xref_badge = libgly.get_xref_badge(map_dict, xref_key)
+                        xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
                         o["evidence"] = [{"id":xref_id, "url":xref_url, "database":xref_badge}]
                         combo_id = "%s|%s|%s" % (main_id, xref_id, o["term"])
                         load_obj[combo_id] = o
@@ -416,10 +362,8 @@ def main():
 
 
         #--> publication
-        #--> keep this empty for now
-        for sheet_name in ["glycan_citations_glycomotif"]:
+        for sheet_name in ["glycan_citations_motif"]:
             if file_name.find(sheet_name) != -1:
-                species = file_name.split("_")[0]
                 prop_name = "publication"
                 prop_dict = {"title":"title", 
                         "journal":"journal_name","date":"publication_date","authors":"authors"}
@@ -435,9 +379,9 @@ def main():
                     if combo_id == "seen":
                         continue
                     main_id, xref_key, xref_id = combo_id.split("|")
-                    xref_url =  map_dict["xrefkey2url"][xref_key][0] % (xref_id)
+                    xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
                     load_obj[combo_id]["date"] = load_obj[combo_id]["date"].split(" ")[0]
-                    xref_badge = map_dict["xrefkey2badge"][xref_key]
+                    xref_badge = libgly.get_xref_badge(map_dict, xref_key)
                     load_obj[combo_id]["reference"] = [
                         {
                             "type":xref_badge,
@@ -463,7 +407,7 @@ def main():
                         motif_name = tmp_row[tmp_fl.index("motif_name")]
                         combo_id = "%s|%s" % (motif_ac_xref,main_id)
                         xref_key = "glycan_xref_glytoucan"
-                        xref_url = map_dict["xrefkey2url"][xref_key][0] % (main_id)
+                        xref_url = libgly.get_xref_url(map_dict, xref_key, main_id,is_cited)
                         main_dict["glycans"][combo_id] = {"glytoucan_ac":main_id, 
                                 "url":xref_url
                         }
@@ -471,8 +415,8 @@ def main():
                             main_dict["motif_ac"][motif_ac_xref] = []
                         if motif_ac not in main_dict["motif_ac"][motif_ac_xref]:
                             main_dict["motif_ac"][motif_ac_xref].append(motif_ac)
-                        xref_url = map_dict["xrefkey2url"][xref_key][0] % (motif_ac_xref)
-                        xref_badge = map_dict["xrefkey2badge"][xref_key][0]
+                        xref_url = libgly.get_xref_url(map_dict, xref_key, motif_ac_xref,is_cited)
+                        xref_badge = libgly.get_xref_badge(map_dict, xref_key)
                         o = {"id":motif_ac_xref, "database": xref_badge, "url":xref_url }
                         combo_id = "%s|%s|%s" % (motif_ac_xref,xref_key, motif_ac_xref)
                         main_dict["crossref"][combo_id] = o
@@ -532,8 +476,7 @@ def main():
                                         if p == "keywords":
                                             xref_key = "glycan_xref_motif"
                                             xref_id = val.replace(" ", "_")
-                                
-                                            xref_url = map_dict["xrefkey2url"][xref_key][0] % (xref_id)
+                                            xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
                                             keyword_obj = {"label":val, "url":xref_url}
                                             if val not in seen_kw:
                                                 main_dict[p][main_id].append(keyword_obj)
@@ -590,8 +533,8 @@ def main():
 
 
         #--> crossref
-        #--> don't do crossref here
-        for sheet_name in ["glycan_xrefffff_"]:
+        #--> In addition to GlyToucan crossref, also do dictionary xref
+        for sheet_name in ["glycan_xref_dictionary"]:
             if file_name.find(sheet_name) != -1:
                 prop_name = "crossref"
                 load_obj = main_dict[prop_name]
@@ -609,13 +552,15 @@ def main():
                     main_id = combo_id.split("|")[0]
                     uniprotkb_ac = main_id.split("-")[0]
                     xref_key, xref_id = combo_id.split("|")[-2], combo_id.split("|")[-1]
-                    xref_badge = map_dict["xrefkey2badge"][xref_key][0]
-                    xref_url = map_dict["xrefkey2url"][xref_key][0]
-                    if xref_url.find("%s") != -1:
-                        xref_url = xref_url % (xref_id)
+                    xref_badge = libgly.get_xref_badge(map_dict, xref_key)
+                    xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
                     load_obj[combo_id]["url"] = xref_url
                     load_obj[combo_id]["database"] = xref_badge
-        
+                    cats_dict = map_dict["xrefkey2category"]
+                    xref_categories = cats_dict[xref_key] if xref_key in cats_dict else []
+                    load_obj[combo_id]["categories"] = xref_categories
+
+ 
     
         #--> composition (both composition and composition_advanced used advanced dataset)              
         for sheet_name in ["glycan_monosaccharide_composition_advanced"]:
@@ -636,8 +581,8 @@ def main():
                             cid = map_dict["residue2cid"][residue][0]
                             residue = "other" if residue.lower() == "xxx" else residue.lower()
                             o = {"name":name, "residue":residue, "count":n}
-                            if cid != "" and cid != "0":
-                                url = map_dict["xrefkey2url"]["glycan_xref_monosaccharide_residue_name"][0] % (cid)
+                            if cid != "" and cid.strip() != "0":
+                                url = libgly.get_xref_url(map_dict, "glycan_xref_monosaccharide_residue_name", cid,is_cited)
                                 o = {"name":name, "residue":residue, "count":n, "cid":cid, "url":url}
                             combo_id = "%s|%s|%s" % (main_id, residue, cid)
                             load_obj[combo_id] = o
@@ -659,16 +604,6 @@ def main():
                         for residue in map_dict["residue2name"]:
                             if residue not in tmp_fl:
                                 continue
-                            #if residue not in residue2class:
-                            #    continue
-                            #r_class = residue2class[residue]
-                            #if r_class == "Sia":
-                            #   r_class = residue
-                            #n = int(tmp_row[tmp_fl.index(residue)])
-                            #if r_class not in class_count:
-                            #    class_count[r_class] = 0
-                            #class_count[r_class] += n
-                            
                             #consider only top level residues
                             if residue not in residue_heirarchy:
                                 continue
@@ -682,8 +617,8 @@ def main():
                             cid = map_dict["residue2cid"][r_class][0]
                             r_class = "other" if r_class.lower() == "xxx" else r_class.lower()
                             o = {"name":r_class_name, "residue":r_class, "count":n}
-                            if cid != "" or cid != "0":
-                                url = map_dict["xrefkey2url"]["glycan_xref_monosaccharide_residue_name"][0] % (cid)
+                            if cid != "" and cid.strip() != "0":
+                                url = libgly.get_xref_url(map_dict, "glycan_xref_monosaccharide_residue_name",cid,is_cited)
                                 o = {"name":r_class_name, "residue":r_class, "count":n, "cid":cid, "url":url}
                             combo_id = "%s|%s|%s" % (main_id, r_class, cid)
                             load_obj[combo_id] = o
@@ -736,9 +671,9 @@ def main():
     for main_id in tmp_dict:
         if main_id == "seen":
             continue
+        obj = tmp_dict[main_id]
         if main_id not in motif_glytoucan_ac_list:
             continue
-        obj = tmp_dict[main_id]
         if "motif_ac" not in obj:
             continue
         motif_ac_list = []
@@ -754,20 +689,18 @@ def main():
                 for motif_name in motif_name_dict[motif_ac]:
                     motif_names.append({"name":motif_name, "domain":"motifname"})
             obj["names"] = parent_names + motif_names
-
-            out_file = path_obj["jsondbpath"] + "/motifdb/%s.json" % (motif_ac)
+            
+            section_stats.get_sec_stats(obj, "motif")
+            out_file = "jsondb/motifdb/%s.json" % (motif_ac)
             for k in ["mass", "mass_pme", "number_monosaccharides"]:
                 if obj[k] == 0.0 or obj[k] == 0:
                     obj.pop(k)
             with open(out_file, "w") as FW:
                 FW.write("%s\n" % (json.dumps(obj, indent=4)))
             record_count += 1 
-    print ("make-motifdb: final filtered in: %s motif objects" % (record_count))
+    msg = "make-motifdb: final filtered in: %s motif objects" % (record_count)
+    csvutil.write_log_msg(log_file, msg, "a")
 
-
-    out_file = path_obj["jsondbpath"] + "/logs/motifdb.json" 
-    with open(out_file, "w") as FW:
-        FW.write("%s\n" % (json.dumps(record_stat, indent=4)))
 
 
 

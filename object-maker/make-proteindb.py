@@ -5,12 +5,67 @@ from optparse import OptionParser
 import csv
 import json
 import glob
+import subprocess
 from collections import OrderedDict
 from Bio import SeqIO
 from Bio.Seq import Seq
 
 
 import libgly
+import csvutil
+import batchutil
+import section_stats
+
+
+
+
+
+
+def get_seq_features(obj):
+
+    tmp_dict = {}
+
+    sec = "glycosylation"
+    tmp_dict["n_linked_sites"] = []
+    tmp_dict["o_linked_sites"] = []
+    if sec in obj:
+        for o in obj[sec]:
+            if "start_pos" not in o:
+                continue
+            if o["type"].lower() == "n-linked":
+                if o["start_pos"] not in  tmp_dict["n_linked_sites"]:
+                    tmp_dict["n_linked_sites"].append(o["start_pos"])
+            elif o["type"].lower() == "o-linked":
+                if o["start_pos"] not in  tmp_dict["o_linked_sites"]:
+                    tmp_dict["o_linked_sites"].append(o["start_pos"])
+    
+    for k in ["n_linked_sites", "o_linked_sites"]:
+        tmp_dict[k] = sorted(tmp_dict[k] )
+
+
+    sec = "glycation"
+    for sec in ["snv", "glycation", "phosphorylation"]:
+        k = "%s_sites" % (sec)
+        tmp_dict[k] = []    
+        if sec in obj:
+            for o in obj[sec]:
+                if "start_pos" not in o:
+                    continue
+                if o["start_pos"] not in  tmp_dict[k]:
+                    tmp_dict[k].append(o["start_pos"])
+        tmp_dict[k] = sorted(tmp_dict[k] )
+
+    sec = "site_annotation"
+    k = "sequon_annotation_sites"
+    tmp_dict[k] = []
+    if sec in obj:
+        for o in obj[sec]:
+            if o["annotation"] in ["n_glycosylation_sequon", "o_glycosylation_sequon"]:
+                tmp_dict[k].append({"start_pos":o["start_pos"] , "end_pos":o["end_pos"]})   
+
+    return tmp_dict
+
+
 
 
 
@@ -23,7 +78,7 @@ def get_sort_key_value_mut(obj):
 
 def load_pathways(pathway_dict):
 
-    file_list = glob.glob("reviewed/*_protein_pathways_reactome.csv")
+    file_list = glob.glob(data_dir + "/reviewed/*_protein_pathways_reactome.csv")
     for in_file in file_list:
         data_frame = {}
         libgly.load_sheet(data_frame, in_file, ",")
@@ -40,11 +95,68 @@ def load_pathways(pathway_dict):
     return
 
 
+def load_enzyme_ann(enzyme_ann, species):
+    
+    ec_in_rhea = {}
+    in_file = data_dir + "/reviewed/protein_reaction2ec_rhea.csv"
+    data_frame = {}
+    libgly.load_sheet(data_frame, in_file, ",")
+    f_list = data_frame["fields"]
+    for row in data_frame["data"]:
+        ec_number = row[f_list.index("ec_number")]
+        ec_in_rhea[ec_number] = True
 
-def load_enzymes(enzyme_dict):
+    ec_in_brenda = {}
+    for in_file in glob.glob(data_dir + "/reviewed/*_protein_xref_brenda.csv"):
+        data_frame = {}
+        libgly.load_sheet(data_frame, in_file, ",")
+        f_list = data_frame["fields"]
+        for row in data_frame["data"]:
+            ec_number = row[f_list.index("xref_id")]
+            ec_in_brenda[ec_number] = True
+
+    tmp_dict = {}
+    file_list = glob.glob(data_dir + "/reviewed/%s_protein_enzyme_annotation_uniprotkb.csv" % (species))
+    for in_file in file_list:
+        data_frame = {}
+        libgly.load_sheet(data_frame, in_file, ",")
+        f_list = data_frame["fields"]
+        for row in data_frame["data"]:
+            canon = row[f_list.index("uniprotkb_canonical_ac")]
+            ec_number = row[f_list.index("enzyme_ec")]
+            ec_name = row[f_list.index("enzyme_activity")]
+            if ec_number == "" or ec_name == "":
+                continue
+            evdn_obj_list = []
+            if ec_number in ec_in_rhea:
+                xref_key, xref_id = "protein_xref_rhea_enzyme", ec_number
+                xref_url =  libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+                xref_badge = libgly.get_xref_badge(map_dict, xref_key)
+                evdn_obj_list.append({"id":xref_id, "database":xref_badge, "url":xref_url})
+            if ec_number in ec_in_brenda:
+                xref_key, xref_id = "protein_xref_brenda_enzyme", ec_number
+                xref_url =  libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+                xref_badge = libgly.get_xref_badge(map_dict, xref_key)
+                evdn_obj_list.append({"id":xref_id, "database":xref_badge, "url":xref_url})
+
+            if canon not in tmp_dict:
+                tmp_dict[canon] = {}
+            if ec_number not in tmp_dict[canon]:
+                tmp_dict[canon][ec_number] = {"ec_number":ec_number, "ec_name":ec_name, "evidence":evdn_obj_list}
+                
+    for canon in tmp_dict:
+        enzyme_ann[canon] = []
+        for ec_number in tmp_dict[canon]:
+            enzyme_ann[canon].append(tmp_dict[canon][ec_number])
+
+
+    return
+
+
+def load_enzyme_dict(enzyme_dict, species):
 
     canon2gene_name = {}
-    file_list = glob.glob("reviewed/*_protein_masterlist.csv")
+    file_list = glob.glob(data_dir + "/reviewed/%s_protein_masterlist.csv" % (species))
     for in_file in file_list:
         data_frame = {}
         libgly.load_sheet(data_frame, in_file, ",")
@@ -53,7 +165,7 @@ def load_enzymes(enzyme_dict):
             canon = row[f_list.index("uniprotkb_canonical_ac")]
             canon2gene_name[canon] = row[f_list.index("gene_name")]
 
-    file_list = glob.glob("reviewed/*_protein_enzyme_annotation_uniprotkb.csv")
+    file_list = glob.glob(data_dir + "/reviewed/%s_protein_enzyme_annotation_uniprotkb.csv" % (species))
     for in_file in file_list:
         data_frame = {}
         libgly.load_sheet(data_frame, in_file, ",")
@@ -62,8 +174,8 @@ def load_enzymes(enzyme_dict):
             canon = row[f_list.index("uniprotkb_canonical_ac")]
             e_id = canon.split("-")[0]
             xref_key, xref_id = "protein_xref_uniprotkb", e_id
-            xref_url =  map_dict["xrefkey2url"][xref_key][0] % (xref_id)
-            xref_badge = map_dict["xrefkey2badge"][xref_key][0]
+            xref_url =  libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+            xref_badge = libgly.get_xref_badge(map_dict, xref_key)
             if canon not in enzyme_dict:
                 enzyme_dict[canon] = {
                     "uniprot_ac":e_id,"gene_name":canon2gene_name[canon],
@@ -74,15 +186,26 @@ def load_enzymes(enzyme_dict):
                 "evidence":[{"id":xref_id, "database":xref_badge, "url":xref_url}]
             }
             enzyme_dict[canon]["activity"].append(o)
-            
+
+ 
+    kw = "enzyme"
+    for main_id in enzyme_dict:
+        if main_id not in main_dict["keywords"]:
+            main_dict["keywords"][main_id] = []
+            if kw not in main_dict["keywords"][main_id]:
+                main_dict["keywords"][main_id].append(kw)
+                combo_list = ["uniprotkb_canonical_ac", "keywords"]
+
+
+
     return
 
 
-def load_reactions(reaction_dict, participant_dict, ac2rxn, enzyme_dict):
-    
+def load_reactions(reaction_dict, participant_dict, ac2rxn, enzyme_dict, species):
+
     role_dict = {}
-    file_list = glob.glob("reviewed/*_protein_participants_reactome.csv")
-    file_list += glob.glob("reviewed/*_protein_participants_rhea.csv")
+    file_list = glob.glob(data_dir + "/reviewed/%s_protein_participants_reactome.csv" % (species))
+    file_list += glob.glob(data_dir + "/reviewed/%s_protein_participants_rhea.csv" % (species))
 
     for in_file in file_list:
         data_frame = {}
@@ -119,8 +242,8 @@ def load_reactions(reaction_dict, participant_dict, ac2rxn, enzyme_dict):
 
 
 
-    file_list = glob.glob("reviewed/*_protein_reactions_reactome.csv")
-    file_list += glob.glob("reviewed/*_protein_reactions_rhea.csv")
+    file_list = glob.glob(data_dir + "/reviewed/%s_protein_reactions_reactome.csv" % (species))
+    file_list += glob.glob(data_dir + "/reviewed/%s_protein_reactions_rhea.csv" % (species))
     for in_file in file_list:
         data_frame = {}
         libgly.load_sheet(data_frame, in_file, ",")
@@ -130,9 +253,9 @@ def load_reactions(reaction_dict, participant_dict, ac2rxn, enzyme_dict):
             rxn_id = row[f_list.index("reaction_id")]
             xref_id = rxn_id
             xref_key = "protein_xref_%s" % (source)
-
-            xref_url =  map_dict["xrefkey2url"][xref_key][0] % (xref_id)
-            xref_badge = map_dict["xrefkey2badge"][xref_key][0]
+            
+            xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+            xref_badge = libgly.get_xref_badge(map_dict, xref_key)
             #"reaction_id","reaction_name","cellular_location","pmid","pathway_id"
             input_list = role_dict[rxn_id]["input"] if rxn_id in role_dict else []
             output_list = role_dict[rxn_id]["output"] if rxn_id in role_dict else []
@@ -153,11 +276,11 @@ def load_reactions(reaction_dict, participant_dict, ac2rxn, enzyme_dict):
 
     return
 
-def load_protein_names():
+def load_protein_names(recname_dict, submittedname_dict):
 
-    file_list = glob.glob("reviewed/*_protein_*names.csv")
-    file_list += glob.glob("reviewed/*_protein_*names_refseq.csv")
-    file_list += glob.glob("reviewed/*_protein_*names_uniprotkb.csv")
+    file_list = glob.glob(data_dir + "/reviewed/*_protein_*names.csv")
+    file_list += glob.glob(data_dir + "/reviewed/*_protein_*names_refseq.csv")
+    file_list += glob.glob(data_dir + "/reviewed/*_protein_*names_uniprotkb.csv")
     sheet_info = load_name_sheet_info()
     for in_file in file_list:
         sheet_name = "protein_" + in_file.split("_protein_")[1].replace(".csv", "")
@@ -165,6 +288,7 @@ def load_protein_names():
         load_obj = main_dict[prop_name]
         field_list = sheet_info[sheet_name]["fieldlist"]
         resource = sheet_info[sheet_name]["resource"]
+        resource_badge = sheet_info[sheet_name]["badge"]
         data_frame = {}
         libgly.load_sheet(data_frame, in_file, ",")
         f_list = data_frame["fields"]
@@ -187,9 +311,8 @@ def load_protein_names():
                 xref_id = canon.split("-")[0]
                 if xref_key == "protein_xref_refseq":
                     xref_id = row[f_list.index("refseq_ac")]
-                xref_badge = map_dict["xrefkey2badge"][xref_key][0]
-                xref_url = map_dict["xrefkey2url"][xref_key][0] % (xref_id)
-                name_obj = { "name":name, "resource":xref_badge,  "type":name_type,
+                xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+                name_obj = { "name":name, "resource":resource_badge,  "type":name_type,
                         "url":xref_url, "id":xref_id}
                 combo_id = "%s|%s|%s|%s" % (canon,name_type,name,resource)
                 load_obj[combo_id] = name_obj
@@ -207,7 +330,7 @@ def get_sorting_key(obj):
 def load_species_info(species_obj, species_list):
 
     seen = {}
-    in_file = path_obj["misc"]+ "/species_info.csv"
+    in_file = "generated/misc/species_info.csv"
     libgly.load_species_info(species_obj, in_file)
     species_obj_list = []
     for k in sorted(species_obj, reverse=True):
@@ -217,6 +340,10 @@ def load_species_info(species_obj, species_list):
             species_obj_list.append(o)
             seen[obj["short_name"]] = True
 
+    #tax_id,short_name,long_name,common_name,glygen_name,nt_file,is_reference,sort_order
+
+
+
     species_obj_list.sort(key=get_sorting_key)
     for o in species_obj_list:
         species_list.append(o["shortname"])
@@ -225,32 +352,12 @@ def load_species_info(species_obj, species_list):
     return
 
 
-def load_dictionaries(map_dict, misc_dir):
-
-    dict_list_obj = json.loads(open("conf/protein_dictionaries.json", "r").read())
-    for dict_name in dict_list_obj:
-        map_dict[dict_name] = {}
-        ind_list = dict_list_obj[dict_name]["indexlist"]
-        for pattern in dict_list_obj[dict_name]["fileglob"]:
-            for in_file in glob.glob(misc_dir + pattern):
-                sheet_obj = {}
-                libgly.load_sheet(sheet_obj, in_file, ",")
-                for row in sheet_obj["data"]:
-                    if row ==[] or row[ind_list[0]][0] == "#":
-                        continue
-                    key = row[ind_list[0]]
-                    val = row[ind_list[1]]
-                    if key not in map_dict[dict_name]:
-                        map_dict[dict_name][key] = []
-                    map_dict[dict_name][key].append(val)
-
-    return
 
 
 def load_disease_names():
 
     data_frame = {}
-    in_file = data_dir + "/protein_disease_names.csv"
+    in_file = data_dir + "/reviewed/protein_disease_names.csv"
     libgly.load_sheet_as_dict(data_frame, in_file, ",", "xref_id")
     tmp_fl = data_frame["fields"]
     for xref_id in data_frame["data"]:
@@ -277,7 +384,7 @@ def load_disease_names():
 def load_disease_idmap(doid2xrefid, xrefid2doid):
 
     data_frame = {}
-    in_file = data_dir + "/protein_disease_idmap.csv"
+    in_file = data_dir + "/reviewed/protein_disease_idmap.csv"
     libgly.load_sheet_as_dict(data_frame, in_file, ",", "do_id")
     tmp_fl = data_frame["fields"]
     for do_id in data_frame["data"]:
@@ -299,7 +406,7 @@ def load_disease_idmap(doid2xrefid, xrefid2doid):
 
 
     data_frame = {}
-    in_file = data_dir + "/human_protein_genomics_england_disease.csv"
+    in_file = data_dir + "/reviewed/human_protein_genomics_england_disease.csv"
     libgly.load_sheet(data_frame, in_file, ",")
     tmp_fl = data_frame["fields"]
     xref_key = "protein_xref_genomics_england"
@@ -336,8 +443,8 @@ def load_property_objlist(tmp_obj_dict,in_file, prop_dict,xref_info, combo_flist
             for f in combo_flist_one:
                 val = tmp_row[tmp_fl.index(f)]
                 val = val[:100] + " ... " if len(val) > 100 else val
-                if in_file.find("_glycosylation_sites_") != -1 and f == "saccharide":
-                    if val not in seen_glycan:
+                if in_file.find("proteoform_glycosylation_sites_") != -1 and f == "saccharide":
+                    if val not in glycan_dict:
                         val = ""
                 if f == "glycosylation_type":
                     val = val.lower()
@@ -362,14 +469,14 @@ def load_property_objlist(tmp_obj_dict,in_file, prop_dict,xref_info, combo_flist
                         database_label = tmp_row[tmp_fl.index("database_label")]
                         do_name = "%s [%s disease name]" % (database_label, xref_badge)
                         obj_one["name"] = do_name
-                        obj_one["url"] = map_dict["xrefkey2url"]["protein_xref_do_placeholder"][0]
+                        obj_one["url"] = libgly.get_xref_url(map_dict, "protein_xref_do_placeholder", "",is_cited)
                     else:
                         do_name = ""
                         if do_id in disease_id2names["do"]:
                             do_name = disease_id2names["do"][do_id]["name"]
                             do_name = do_name[0].upper() + do_name[1:]+" [DO disease name]"
                         obj_one["name"] = do_name
-                        obj_one["url"] = map_dict["xrefkey2url"]["protein_xref_do"][0] % (do_id)
+                        obj_one["url"] = libgly.get_xref_url(map_dict, "protein_xref_do", do_id,is_cited)
 
             if combo_id not in seen_dict:
                 seen_dict[combo_id] = True
@@ -382,8 +489,8 @@ def load_property_objlist(tmp_obj_dict,in_file, prop_dict,xref_info, combo_flist
                 xref_key = tmp_row[tmp_fl.index(xref_info[0])]
                 xref_id = tmp_row[tmp_fl.index(xref_info[1])]
                 if xref_key in map_dict["xrefkey2badge"]:
-                    xref_badge = map_dict["xrefkey2badge"][xref_key][0]
-                    xref_url = map_dict["xrefkey2url"][xref_key][0] % (xref_id)
+                    xref_badge = libgly.get_xref_badge(map_dict, xref_key)
+                    xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
                     obj_two = {"database":xref_badge, "id":xref_id, "url":xref_url}
                     combo_id_xref = combo_id
                     for f in combo_flist_two:
@@ -418,15 +525,15 @@ def load_properity_list(tmp_obj_dict, in_file, field_list, sep):
 
 
 def load_sequence_info(seq_dict, header_dict):
-  
-    s = "*"
-    file_list = glob.glob(data_dir + "%s_protein_allsequences.fasta" % (s))
+
+    file_list = glob.glob(data_dir + "/reviewed/*_protein_allsequences.fasta")
     for in_file in file_list:
         for record in SeqIO.parse(in_file, "fasta"):
             seq_id = record.id.split("|")[1]
             seq_dict[seq_id] = str(record.seq.upper())
-    
-    file_list = glob.glob(data_dir + "%s_protein_sequenceinfo.csv" % (s))
+   
+     
+    file_list = glob.glob(data_dir + "/reviewed/*_protein_sequenceinfo.csv")
     for in_file in file_list:
         data_frame = {}
         libgly.load_sheet(data_frame, in_file, ",")
@@ -439,10 +546,12 @@ def load_sequence_info(seq_dict, header_dict):
 
 
 
-def load_isoformlocus_info(isoformlocus_dict):
-    
+def load_isoformlocus_info(isoformlocus_dict, species_name):
+
+    ensembl_xref_key = custom_xref_key_dict[species_name] if species_name in custom_xref_key_dict else "protein_xref_ensembl"   
+ 
     s = species_list[0] if len(species_list) == 1 else "*"
-    file_list = glob.glob(data_dir + "%s_protein_transcriptlocus.csv" % (s))
+    file_list = glob.glob(data_dir + "/reviewed/%s_protein_transcriptlocus.csv" % (s))
     for in_file in file_list:
         data_frame = {}
         libgly.load_sheet(data_frame, in_file, ",")
@@ -451,8 +560,8 @@ def load_isoformlocus_info(isoformlocus_dict):
             isoform = tmp_row[tmp_fl.index("uniprotkb_isoform_ac")]
             transcript_id = tmp_row[tmp_fl.index("transcript_id")]
             peptide_id = tmp_row[tmp_fl.index("peptide_id")]
-            t_url = map_dict["xrefkey2url"]["protein_xref_ensembl"][0] % (transcript_id)
-            p_url = map_dict["xrefkey2url"]["protein_xref_ensembl"][0] % (peptide_id)
+            t_url = libgly.get_xref_url(map_dict, ensembl_xref_key, transcript_id,is_cited)
+            p_url = libgly.get_xref_url(map_dict, ensembl_xref_key, peptide_id,is_cited)
             start_pos = int(tmp_row[tmp_fl.index("start_pos")])
             end_pos = int(tmp_row[tmp_fl.index("end_pos")])
             strand = tmp_row[tmp_fl.index("strand")]
@@ -484,10 +593,52 @@ def load_isoformlocus_info(isoformlocus_dict):
             }
     return
 
-def load_glycan_masterlist():
+
+def load_synthesized_glycans(synthesized_glycans, glycan_class):
+
+    seen_glytoucan = {}
+    in_file = data_dir + "/reviewed/glycan_enzyme.csv"
+    sheet_obj = {}
+    libgly.load_sheet_as_dict(sheet_obj, in_file, ",", "glytoucan_ac")
+    tmp_fl = sheet_obj["fields"]
+    for glytoucan_ac in sheet_obj["data"]:
+        for row in sheet_obj["data"][glytoucan_ac]:
+            canon = row[tmp_fl.index("uniprotkb_canonical_ac")]
+            if canon not in synthesized_glycans:
+                synthesized_glycans[canon] = []
+                seen_glytoucan[canon] = {}
+            g_type, g_subtype = "Other", "Other"
+            if glytoucan_ac in glycan_class:
+                g_type = glycan_class[glytoucan_ac]["type"]
+                g_subtype = glycan_class[glytoucan_ac]["subtype"]
+            if glytoucan_ac not in seen_glytoucan[canon]:
+                o = {"glytoucan_ac":glytoucan_ac, "type":g_type, "subtype":g_subtype}
+                synthesized_glycans[canon].append(o)
+                seen_glytoucan[canon][glytoucan_ac] = True
+    return
+
+def load_glycan_class(glycan_class):
+
+
+    data_frame = {}
+    in_file = data_dir + "/reviewed/glycan_classification.csv"
+    libgly.load_sheet_as_dict(data_frame, in_file, ",", "glytoucan_ac")
+    tmp_fl = data_frame["fields"]
+    for main_id in data_frame["data"]:
+        for tmp_row in data_frame["data"][main_id]:
+            g_type = tmp_row[tmp_fl.index("glycan_type")].strip()
+            g_subtype = tmp_row[tmp_fl.index("glycan_subtype")].strip()
+            g_type = "Other" if g_type == "" else g_type
+            g_subtype = "Other" if g_subtype == "" else g_subtype
+            glycan_class[main_id] = {"type":g_type, "subtype":g_subtype}
+
+    return 
+
+
+def load_glycan_masterlist(glycan_dict):
 
     is_motif = {}
-    in_file = path_obj["reviewed"] +  "glycan_motif.csv"
+    in_file = data_dir +  "/reviewed/glycan_motif.csv"
     data_frame = {}
     libgly.load_sheet(data_frame, in_file, ",")
     f_list = data_frame["fields"]
@@ -495,33 +646,29 @@ def load_glycan_masterlist():
         ac = row[f_list.index("motif_ac_xref")]
         is_motif[ac] = True
 
-
-    glycan_list = []
     data_frame = {}
-    in_file = path_obj["reviewed"] +  "glycan_masterlist.csv"
+    in_file = data_dir +  "/reviewed/glycan_masterlist.csv"
     libgly.load_sheet(data_frame, in_file, ",")
     f_list = data_frame["fields"]
     for row in data_frame["data"]:
         ac = row[f_list.index("glytoucan_ac")]
-        #if ac not in glycan_list and ac not in is_motif:
-        if ac not in glycan_list:
-            glycan_list.append(ac)
-
-    return glycan_list
+        glycan_dict[ac] = True
 
 
-def load_genelocus_info(genelocus_dict):
+    return 
 
-    s = species_list[0] if len(species_list) == 1 else "*"
-    file_list = glob.glob(data_dir + "%s_protein_genelocus.csv" % (s))                
 
+def load_genelocus_info(genelocus_dict, species_name):
+
+    ensembl_xref_key = custom_xref_key_dict[species_name] if species_name in custom_xref_key_dict else "protein_xref_ensembl"
+    file_list = glob.glob(data_dir + "/reviewed/%s_protein_genelocus.csv" % (species_name))                
     for in_file in file_list:
         data_frame = {}
         libgly.load_sheet(data_frame, in_file, ",")
         tmp_fl = data_frame["fields"]
         for tmp_row in data_frame["data"]:
             canon = tmp_row[tmp_fl.index("uniprotkb_canonical_ac")]
-            ensemble_gene_id = tmp_row[tmp_fl.index("ensembl_gene_id")]
+            ensembl_gene_id = tmp_row[tmp_fl.index("ensembl_gene_id")]
             start_pos = int(tmp_row[tmp_fl.index("start_pos")])
             end_pos = int(tmp_row[tmp_fl.index("end_pos")])
             strand = tmp_row[tmp_fl.index("strand")]
@@ -532,7 +679,7 @@ def load_genelocus_info(genelocus_dict):
                 end_pos = int(tmp_row[tmp_fl.index("start_pos")])
                 strand_sign = "-"
             chr_id = tmp_row[tmp_fl.index("chromosome_id")]
-            gene_url = map_dict["xrefkey2url"]["protein_xref_ensembl"][0] % (ensemble_gene_id)
+            gene_url = libgly.get_xref_url(map_dict, ensembl_xref_key, ensembl_gene_id,is_cited)
             if canon not in genelocus_dict:
                 genelocus_dict[canon] = {
                     "chromosome":chr_id
@@ -542,7 +689,7 @@ def load_genelocus_info(genelocus_dict):
                     ,"evidence":[
                         {
                             "database":"Ensembl Gene"
-                            ,"id":ensemble_gene_id
+                            ,"id":ensembl_gene_id
                             ,"url":gene_url
                         }
                     ]
@@ -552,10 +699,10 @@ def load_genelocus_info(genelocus_dict):
 
 
 
-def load_cluster_info(cls_dict, seq_dict):
+def load_cluster_info(cls_dict, recname_dict, submittedname_dict):
 
     canon2genename = {}
-    for in_file in glob.glob(data_dir + "/*_protein_masterlist.csv"):
+    for in_file in glob.glob(data_dir + "/reviewed/*_protein_masterlist.csv"):
         data_frame = {}
         libgly.load_sheet(data_frame, in_file, ",")
         tmp_fl = data_frame["fields"]
@@ -566,7 +713,7 @@ def load_cluster_info(cls_dict, seq_dict):
     homolog_dict = {}
     member_dict = {}
     data_frame = {}
-    in_file = data_dir + "/protein_homolog_clusters.csv"
+    in_file = data_dir + "/reviewed/protein_homolog_clusters.csv"
     libgly.load_sheet(data_frame, in_file, ",")
     tmp_fl = data_frame["fields"]
     for row in data_frame["data"]:
@@ -577,7 +724,6 @@ def load_cluster_info(cls_dict, seq_dict):
         xref_key = row[tmp_fl.index("xref_key")]
         xref_id = row[tmp_fl.index("xref_id")]
         cls_id = "%s %s %s" % (homolog_cluster_id, xref_key, xref_id)
-        prop = "protein_names"
         recname = ""
         if canon in recname_dict["protein"]:
             recname =  recname_dict["protein"][canon]
@@ -585,6 +731,8 @@ def load_cluster_info(cls_dict, seq_dict):
             recname = submittedname_dict["protein"][canon]
         tax_id = row[tmp_fl.index("tax_id")]
         tax_name = species_obj[str(tax_id)]["long_name"]
+        common_name = species_obj[str(tax_id)]["common_name"]
+        glygen_name = species_obj[str(tax_id)]["glygen_name"]
         gene_name = canon2genename[canon] if canon in canon2genename else ""
         if canon not in homolog_dict:
             homolog_dict[canon] = {
@@ -599,9 +747,11 @@ def load_cluster_info(cls_dict, seq_dict):
                 }
                 ,"evidence":[]
             }
-            common_name = species_obj[str(tax_id)]["common_name"]
-            if common_name != "":
-                homolog_dict[canon]["common_name"] = common_name
+            for name_field in ["glygen_name", "common_name"]:
+                name_value = species_obj[str(tax_id)][name_field]
+                if name_value != "":
+                    homolog_dict[canon][name_field] = name_value
+
         if cls_id not in member_dict:
             member_dict[cls_id] = {}
         member_dict[cls_id][canon] = True
@@ -610,7 +760,7 @@ def load_cluster_info(cls_dict, seq_dict):
     for cls_id in member_dict:
         member_list = member_dict[cls_id]
         for canon_one in member_list:
-            for canon_two in member_list: 
+            for canon_two in member_list:
                 if canon_one == canon_two:
                     continue
                 if canon_one not in evdn_dict:
@@ -629,8 +779,8 @@ def load_cluster_info(cls_dict, seq_dict):
                 xref_key, xref_id = cls_id.split(" ")[1], cls_id.split(" ")[2]
                 if xref_key == "protein_xref_oma":
                     xref_id = canon_one.split("-")[0]
-                xref_url = map_dict["xrefkey2url"][xref_key][0] % (xref_id)
-                xref_badge = map_dict["xrefkey2badge"][xref_key][0]
+                xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+                xref_badge = libgly.get_xref_badge(map_dict, xref_key)
                 o = {"id":xref_id, "url":xref_url, "database":xref_badge}
                 main_dict["orthologs"][combo_id]["evidence"].append(o)
 
@@ -642,31 +792,37 @@ def load_name_sheet_info():
 
     return {
         "protein_recnames":{
+            "badge":"UniProtKB",
             "resource":"uniprotkb", 
             "xref_key":"protein_xref_uniprotkb_proteinname",
             "fieldlist":["recommended_name_full","recommended_name_short","ec_name"]
         },
         "protein_altnames":{
+            "badge":"UniProtKB",
             "resource":"uniprotkb",
             "xref_key":"protein_xref_uniprotkb_proteinname",
             "fieldlist":["alternative_name_full","alternative_name_short","ec_name"]
         },
         "protein_submittednames":{
+            "badge":"UniProtKB",
             "resource":"uniprotkb",
             "xref_key":"protein_xref_uniprotkb_proteinname",
             "fieldlist":["submitted_name_full","submitted_name_short","ec_name"]
         },
         "protein_proteinnames_refseq":{
+            "badge":"RefSeq",
             "resource":"refseq",
             "xref_key":"protein_xref_refseq",
             "fieldlist":["refseq_protein_name"]
         },
         "protein_genenames_uniprotkb":{
+            "badge":"UniProtKB",
             "resource":"uniprotkb",
             "xref_key":"protein_xref_uniprotkb",
             "fieldlist":["gene_symbol_recommended","gene_symbol_alternative","orf_name"]
         },  
         "protein_genenames_refseq":{
+            "badge":"RefSeq",
             "resource":"refseq",
             "xref_key":"protein_xref_refseq",
             "fieldlist":["refseq_gene_name"]
@@ -738,8 +894,8 @@ def get_disease_info_old(do_id, mondo_id, mim_id):
     if do_id != "":
         name_xref_key = "protein_xref_do"
         name_xref_id = do_id
-        name_xref_url = map_dict["xrefkey2url"][name_xref_key][0] % (name_xref_id)
-        name_xref_badge = map_dict["xrefkey2badge"][name_xref_key][0]
+        name_xref_url = libgly.get_xref_url(map_dict, name_xref_key, name_xref_id,is_cited)
+        name_xref_badge = libgly.get_xref_badge(map_dict, name_xref_key)
         name = disease_id2names["do"][name_xref_id]["name"] if name_xref_id in disease_id2names["do"] else ""
         disease_desc = disease_id2desc["do"][name_xref_id] if name_xref_id in disease_id2desc["do"] else ""
         disease_info = {
@@ -749,8 +905,8 @@ def get_disease_info_old(do_id, mondo_id, mim_id):
     elif mondo_id != "":
         name_xref_key = "protein_xref_mondo"
         name_xref_id = mondo_id
-        name_xref_url = map_dict["xrefkey2url"][name_xref_key][0] % (name_xref_id)
-        name_xref_badge = map_dict["xrefkey2badge"][name_xref_key][0]
+        name_xref_url = libgly.get_xref_url(map_dict, name_xref_key, name_xref_id,is_cited)
+        name_xref_badge = libgly.get_xref_badge(map_dict, name_xref_key)
         name = disease_id2names["mondo"][name_xref_id]["name"]
         disease_desc = disease_id2desc["mondo"][name_xref_id]
         disease_info = {
@@ -760,8 +916,8 @@ def get_disease_info_old(do_id, mondo_id, mim_id):
     elif mim_id != "" and mim_id in disease_id2names["omim"]:
         name_xref_key = "protein_xref_omim"
         name_xref_id = mim_id
-        name_xref_url = map_dict["xrefkey2url"][name_xref_key][0] % (name_xref_id)
-        name_xref_badge = map_dict["xrefkey2badge"][name_xref_key][0]
+        name_xref_url = libgly.get_xref_url(map_dict, name_xref_key, name_xref_id,is_cited)
+        name_xref_badge = libgly.get_xref_badge(map_dict, name_xref_key)
         name = disease_id2names["omim"][name_xref_id]["name"]
         disease_desc = disease_id2desc["omim"][name_xref_id]
         disease_info = {
@@ -782,8 +938,8 @@ def get_disease_info_old(do_id, mondo_id, mim_id):
         for k in syn_obj_list:
             syn_xref_key = "protein_xref_" + k
             syn_xref_id = syn_obj_list[k]["xrefid"]
-            syn_xref_url = map_dict["xrefkey2url"][syn_xref_key][0] % (syn_xref_id)
-            syn_xref_badge = map_dict["xrefkey2badge"][syn_xref_key][0]
+            syn_xref_url = libgly.get_xref_url(map_dict,syn_xref_key,syn_xref_id,is_cited)
+            syn_xref_badge = libgly.get_xref_badge(map_dict, syn_xref_key)
             for syn in syn_obj_list[k]["synlist"]:
                 if syn.lower() == disease_name.lower():
                     continue
@@ -803,187 +959,7 @@ def get_disease_info_old(do_id, mondo_id, mim_id):
 
     return disease_obj
 
-
-
-
-#######################################
-def main():
-
-    usage = "\n%prog  [options]"
-    parser = OptionParser(usage,version="%prog version___")
-    parser.add_option("-s","--sec",action="store",dest="sec",help="Object section")
-
-    (options,args) = parser.parse_args()
-    sec_name_list = []
-    if options.sec != None:
-        sec_name_list = options.sec.split(",")
-
-    global config_obj
-    global path_obj
-    global species_obj
-    global species_list
-    global map_dict
-    global doid2xrefid
-    global xrefid2doid
-    global data_dir
-    global misc_dir
-    global main_dict
-    global seen_glycan
-    global disease_id2names
-    global disease_id2desc
-    global recname_dict
-    global submittedname_dict
-
-
-    config_file = "../conf/config.json"
-    config_obj = json.loads(open(config_file, "r").read())
-    path_obj  =  config_obj[config_obj["server"]]["pathinfo"]
-
-    data_dir = "reviewed/"
-    misc_dir = "generated/misc/"
-
-
-
-    DEBUG = True if sec_name_list != [] else False
-
-
-    glycan_list = load_glycan_masterlist()
-
-
-    file_name_list = []
-    ds_obj_list = json.loads(open(misc_dir + "/dataset-masterlist.json", "r").read())
-    for obj in ds_obj_list:
-        ds_name = obj["name"]
-        ds_format = obj["format"]
-        mol = obj["categories"]["molecule"]
-        if ds_name in ["homolog_alignments", "isoform_alignments"]:
-            continue
-        if obj["categories"]["species"] == []:
-            if obj["integration_status"]["status"] == "integrate_all":
-                if "protein" in obj["target_objects"]:
-                    file_name_list.append("%s_%s" % (mol, ds_name))
-        elif obj["integration_status"]["status"] != "integrate_none":
-            sp_list_one = sorted(obj["categories"]["species"])
-            for species in sp_list_one:
-                if species in ["fruitfly"]:
-                    continue
-                if species not in obj["integration_status"]["excludelist"]:
-                    if "protein" in obj["target_objects"]:
-                        file_name_list.append("%s_%s_%s" % (species, mol, ds_name))
-
-    #Since *_protein_expression_disease depends on *_protein_expression_normal,
-    #move it to last order in the file_name_list
-    tmp_list = []
-    for f in file_name_list:
-        if f.find("protein_expression_disease") != -1:
-            tmp_list.append(f)
-            file_name_list.remove(f)
-    file_name_list += tmp_list
-
-
-
-    sec_info = json.loads(open("generated/misc/protein_sectioninfo.json", "r").read())
-
-    species_obj, species_list = {}, []
-    load_species_info(species_obj, species_list)
-
-    pattern_list = []
-    if sec_name_list != []:
-        for sec_name in sec_name_list:
-            pattern_list += sec_info[sec_name]["sheetlist"]
-        species_list = ["human"]
-    else:
-        for sec in sec_info:
-            pattern_list += sec_info[sec]["sheetlist"]
-    pattern_list = list(set(pattern_list))
-
-
-    selected_file_name_list = []
-    for file_name in file_name_list:
-        cond_list = []
-        for pat in ["_protein_masterlist"] + pattern_list:
-            cond_list += [file_name.find(pat) != -1]
-        if list(set(cond_list)) != [False]:
-            selected_file_name_list.append(file_name)
-
-    #Check missing files
-    mising_files = []
-    for file_name in selected_file_name_list:
-        file_ext = "fasta" if file_name.find("protein_allsequences") != -1 else "csv"
-        in_file = "%s%s.%s" % (data_dir,file_name,file_ext)
-        if os.path.isfile(in_file) == False:
-        #if os.path.isfile(in_file) == False and in_file.find("fruitfly") == -1:
-            mising_files.append(in_file)
-
-    
-    if mising_files != []:
-        print ("The following files are missing:")
-        print (json.dumps(mising_files, indent=4))
-        exit()
-
-    ###############
-    # Only for debug
-    #tmp_list = []
-    #for f in selected_file_name_list:
-    #    if f.find("sarscov2_proteoform_glycosylation_sites_unicarbkb") != -1:
-    #        tmp_list.append(f)
-    #selected_file_name_list = tmp_list
-    #print (json.dumps(selected_file_name_list, indent=4))
-    #exit()
-
-    ###############
-
-
-    map_dict = {}
-    load_dictionaries(map_dict, misc_dir)
-
-
-
-    main_dict = {}
-    record_stat = {}
-    for sec in sec_info:
-        main_dict[sec] = {"seen":{}}
-
-    enzyme_dict = {}
-    load_enzymes(enzyme_dict)
-    kw = "enzyme"
-    for main_id in enzyme_dict:
-        if main_id not in main_dict["keywords"]:
-            main_dict["keywords"][main_id] = []
-            if kw not in main_dict["keywords"][main_id]:
-                main_dict["keywords"][main_id].append(kw)
-                combo_list = ["uniprotkb_canonical_ac", "keywords"]
-                update_record_stat(record_stat,  file_name, "keywords", 1, combo_list)
-
-
-    reaction_dict, participant_dict, ac2rxn = {}, {}, {}
-    load_reactions(reaction_dict,participant_dict, ac2rxn, enzyme_dict)
-
-
-
-    pathway_dict = {}
-    load_pathways(pathway_dict)
-
-
-
-    disease_id2names = {}
-    disease_id2desc = {}
-    load_disease_names()
-
-    
-    seq_dict, header_dict = {}, {}
-    load_sequence_info(seq_dict, header_dict)
-
-    genelocus_dict = {}
-    load_genelocus_info(genelocus_dict)
-
-    isoformlocus_dict = {}
-    load_isoformlocus_info(isoformlocus_dict)
-
-    recname_dict = {"protein":{}, "gene":{}}
-    submittedname_dict = {"protein":{}}
-    load_protein_names()
-
+def load_refseq_dict():
 
     refseq_dict = {}
     for combo_id in main_dict["protein_names"]:
@@ -992,105 +968,177 @@ def main():
             obj = main_dict["protein_names"][combo_id]
             if canon not in refseq_dict:
                 ac = obj["id"]
-                url = map_dict["xrefkey2url"]["protein_xref_refseq"][0] % (ac)
+                url = libgly.get_xref_url(map_dict, "protein_xref_refseq", ac,is_cited)
                 refseq_dict[canon] = {"ac":ac, "name":obj["name"], "url":url}
+    return refseq_dict
+
+def load_is_reported(expected_dslist):
 
 
+    #predicted_xref_key_list = [ "protein_xref_uniprotkb_gly"]
+    predicted_list = [
+        "proteoform_glycosylation_sites_uniprotkb", 
+        "proteoform_glycosylation_sites_predicted_isoglyp"
+    ]    
+
+    is_reported = {}
+    for file_name in expected_dslist:
+        file_ext = "fasta" if file_name.find("protein_allsequences") != -1 else "csv"
+        in_file = "%s/reviewed/%s.%s" % (data_dir,file_name,file_ext)
+        predicted_flag = False
+        for val in predicted_list:
+            if file_name.find(val) != -1:
+                predicted_flag = True
+                break
+        if file_name.find("proteoform_glycosylation_sites_") != -1:
+            FR = open(in_file, "r")
+            idx = 0
+            tmp_fl = []
+            for line in FR:
+                idx += 1
+                tmp_row = line.strip().split("\",\"")
+                tmp_row[0], tmp_row[-1] = tmp_row[0].replace("\"", ""), tmp_row[-1].replace("\"", "")
+                if idx == 1:
+                    tmp_fl = tmp_row
+                    continue
+                main_id = tmp_row[tmp_fl.index("uniprotkb_canonical_ac")]
+                aa_pos = tmp_row[tmp_fl.index("glycosylation_site_uniprotkb")]
+                glytoucan_ac = tmp_row[tmp_fl.index("saccharide")]
+                start_pos = tmp_row[tmp_fl.index("start_pos")]
+                end_pos = tmp_row[tmp_fl.index("end_pos")]
+                xref_key = tmp_row[tmp_fl.index("xref_key")]
+                #if xref_key not in predicted_xref_key_list:
+                if predicted_flag == False:
+                    combo_id = "%s|%s|%s|%s" % (main_id,start_pos, end_pos,glytoucan_ac)
+                    is_reported[combo_id] = True
+                    combo_id = "%s|%s|%s|%s" % (main_id,start_pos, end_pos,"")
+                    is_reported[combo_id] = True
+            FR.close()
+
+    return is_reported
+
+
+
+
+def make_objects(species_name):
+
+
+    # set order to 1000 to move datasets to the end
+    # set order to 0 to move datasets to the start
+    order_dict = {"_protein_masterlist":0, "_protein_expression_disease": 1000}
+    tmp_dslist =  csvutil.get_expected_dslist("protein", [], order_dict)
+    expected_dslist = []
+    for f in tmp_dslist:
+        sp, mol = f.split("_")[0], f.split("_")[1]
+        if mol in ["protein", "proteoform"]:
+            if sp == species_name:
+                expected_dslist.append(f)
+        else:
+            expected_dslist.append(f)
+
+    #print (json.dumps(expected_dslist, indent=4))
+    #print (len(expected_dslist))
+    #exit()
+
+    missing_list = []
+    for file_name in expected_dslist:
+        in_file = "%s/reviewed/%s.csv" % (data_dir,file_name)
+        if os.path.isfile(in_file) == False:
+            missing_list.append(in_file)
+    if missing_list != []:
+        print ("Dataset files missing:")
+        print (json.dumps(missing_list, indent=4))
+        sys.exit()
 
     
+    sec_info = json.loads(open("generated/misc/protein_sectioninfo.json", "r").read())
+    for sec in sec_info:
+        main_dict[sec] = {"seen":{}}
 
 
+    log_file = "logs/make-proteindb.log"
+
+
+    msg = "make-proteindb: loading dictionaries for %s" % (species_name)
+    csvutil.write_log_msg(log_file, msg, "a")
+    csvutil.load_dictionaries(map_dict, "generated/misc/")
+
+
+    msg = "make-proteindb: loading protein names for %s" % (species_name)
+    csvutil.write_log_msg(log_file, msg, "a")
+    recname_dict = {"protein":{}, "gene":{}}
+    submittedname_dict = {"protein":{}}
+    load_protein_names(recname_dict, submittedname_dict)
+
+    msg = "make-proteindb: loading enzyme_ann for %s" % (species_name)
+    csvutil.write_log_msg(log_file, msg, "a")
+    enzyme_ann = {}
+    load_enzyme_ann(enzyme_ann, species_name)
+
+    msg = "make-proteindb: loading enzyme_dict for %s" % (species_name)
+    csvutil.write_log_msg(log_file, msg, "a")
+    enzyme_dict = {}
+    load_enzyme_dict(enzyme_dict, species_name)
+
+    
+    msg = "make-proteindb: loading gene locus"
+    csvutil.write_log_msg(log_file, msg, "a")
+    genelocus_dict = {}
+    load_genelocus_info(genelocus_dict, species_name)
+   
+    msg = "make-proteindb: loading isoform info"
+    csvutil.write_log_msg(log_file, msg, "a")
+    isoformlocus_dict = {}
+    load_isoformlocus_info(isoformlocus_dict, species_name)
+ 
+    msg = "make-proteindb: loading reaction_dict participant_dict ac2rxn for %s" % (species_name)
+    csvutil.write_log_msg(log_file, msg, "a")
+    reaction_dict, participant_dict, ac2rxn = {}, {}, {}
+    load_reactions(reaction_dict,participant_dict, ac2rxn, enzyme_dict, species_name)
+
+    msg = "make-proteindb: loading pathway_dict"
+    csvutil.write_log_msg(log_file, msg, "a")
+    pathway_dict = {}
+    load_pathways(pathway_dict)
+
+    msg = "make-proteindb: loading disease_id2names, disease_id2desc"
+    csvutil.write_log_msg(log_file, msg, "a")
+    load_disease_names()
+
+
+    msg = "make-proteindb: loading refseq info"
+    csvutil.write_log_msg(log_file, msg, "a")
+    refseq_dict = load_refseq_dict()
+
+    msg = "make-proteindb: loading cls_dict"
+    csvutil.write_log_msg(log_file, msg, "a")
     cls_dict = {}
-    load_cluster_info(cls_dict, seq_dict)
+    load_cluster_info(cls_dict, recname_dict, submittedname_dict)
+
+    msg = "make-proteindb: loading is_reported"
+    csvutil.write_log_msg(log_file, msg, "a")
+    is_reported = load_is_reported(expected_dslist)
 
 
-    seen_glycan = {}
-    in_file = data_dir + "/glycan_masterlist.csv"
-    sheet_obj = {}
-    libgly.load_sheet_as_dict(sheet_obj, in_file, ",", "glytoucan_ac")
-    tmp_fl = sheet_obj["fields"]
-    for glytoucan_ac in sheet_obj["data"]:
-        if glytoucan_ac not in seen_glycan:
-            seen_glycan[glytoucan_ac] = True
-
-    data_frame = {}
-    in_file = data_dir + "/glycan_classification.csv"
-    libgly.load_sheet_as_dict(data_frame, in_file, ",", "glytoucan_ac")
-    tmp_fl = data_frame["fields"]
-    glycan_class = {}
-    for main_id in data_frame["data"]:
-        for tmp_row in data_frame["data"][main_id]:
-            g_type = tmp_row[tmp_fl.index("glycan_type")].strip()
-            g_subtype = tmp_row[tmp_fl.index("glycan_subtype")].strip()
-            g_type = "Other" if g_type == "" else g_type
-            g_subtype = "Other" if g_subtype == "" else g_subtype
-            glycan_class[main_id] = {"type":g_type, "subtype":g_subtype}
-
-
-    synthesized_glycans = {}
-    seen_glytoucan = {}
-    in_file = data_dir + "/glycan_enzyme.csv"
-    sheet_obj = {}
-    libgly.load_sheet_as_dict(sheet_obj, in_file, ",", "glytoucan_ac")
-    tmp_fl = sheet_obj["fields"]
-    for glytoucan_ac in sheet_obj["data"]:
-        for row in sheet_obj["data"][glytoucan_ac]:
-            canon = row[tmp_fl.index("uniprotkb_canonical_ac")]  
-            if canon not in synthesized_glycans:
-                synthesized_glycans[canon] = []
-                seen_glytoucan[canon] = {}
-            g_type, g_subtype = "Other", "Other"
-            if glytoucan_ac in glycan_class:
-                g_type = glycan_class[glytoucan_ac]["type"]
-                g_subtype = glycan_class[glytoucan_ac]["subtype"]
-            if glytoucan_ac not in seen_glytoucan[canon]:
-                o = {"glytoucan_ac":glytoucan_ac, "type":g_type, "subtype":g_subtype}
-                synthesized_glycans[canon].append(o)
-                seen_glytoucan[canon][glytoucan_ac] = True
-
-
-
-    #--> is_reported dict for glycosylation
-    is_reported = {}
-    predicted_xref_key_list = [ "protein_xref_uniprotkb_gly"]
-    for file_name in selected_file_name_list:
-        file_ext = "fasta" if file_name.find("protein_allsequences") != -1 else "csv"
-        in_file = "%s%s.%s" % (data_dir,file_name,file_ext)
-        if file_name.find("_glycosylation_sites_") != -1:
-            data_frame = {}
-            libgly.load_sheet_as_dict(data_frame, in_file, ",", "uniprotkb_canonical_ac")
-            tmp_fl = data_frame["fields"]
-            for main_id in data_frame["data"]:
-                for tmp_row in data_frame["data"][main_id]:
-                    aa_pos = tmp_row[tmp_fl.index("glycosylation_site_uniprotkb")]
-                    glytoucan_ac = tmp_row[tmp_fl.index("saccharide")]
-                    start_pos = tmp_row[tmp_fl.index("start_pos")]
-                    end_pos = tmp_row[tmp_fl.index("end_pos")]
-                    xref_key = tmp_row[tmp_fl.index("xref_key")]
-                    if xref_key not in predicted_xref_key_list:
-                        combo_id = "%s|%s|%s|%s" % (main_id,start_pos, end_pos,glytoucan_ac)
-                        is_reported[combo_id] = True
-                        combo_id = "%s|%s|%s|%s" % (main_id,start_pos, end_pos,"")
-                        is_reported[combo_id] = True
-
-
+    biomarker_dict = csvutil.get_biomarker_dict("protein")
 
     seen_combo_glycosylation = {}
     seen_combo_disease = {}
 
     file_idx = 1
-    file_count = len(selected_file_name_list)
-    
-    for file_name in selected_file_name_list:
-        
+    file_count = len(expected_dslist)
+    for file_name in expected_dslist:
         file_ext = "fasta" if file_name.find("protein_allsequences") != -1 else "csv" 
-        in_file = "%s%s.%s" % (data_dir,file_name,file_ext)
+        in_file = "%s/reviewed/%s.%s" % (data_dir,file_name,file_ext)
         if os.path.isfile(in_file) == False:
-            print ("make-proteindb: file %s does NOT exist!" % (in_file))
+            msg = "make-proteindb: file %s does NOT exist!" % (in_file)
+            csvutil.write_log_msg(log_file, msg, "a")
             sys.exit()
   
-        print ("make-proteindb: %s [%s/%s]" % (in_file, file_idx, file_count))
+        msg = "make-proteindb: %s.%s [%s/%s]" % (file_name,file_ext, file_idx, file_count)
+        csvutil.write_log_msg(log_file, msg, "a")
         file_idx += 1
+        
         #--> uniprot_canonical_ac, uniprot_ac, species
         sheet_name = "protein_masterlist"
         if file_name.find(sheet_name) != -1:
@@ -1112,6 +1160,7 @@ def main():
                 main_dict[prop_name][main_id] = uniprotkb_ac
                 combo_list = ["uniprotkb_canonical_ac", "uniprot_ac"]
                 update_record_stat(record_stat,  file_name, prop_name, 1, combo_list)
+
 
                 prop_name = "reactions"
                 participant_list, enzyme_list = [], []
@@ -1154,7 +1203,7 @@ def main():
                 update_record_stat(record_stat,  file_name, prop_name, 1, combo_list)
 
                 xref_key, xref_id = "protein_xref_uniprotkb", uniprotkb_ac
-                gene_url = map_dict["xrefkey2url"][xref_key][0] % (xref_id)
+                gene_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
                 tmp_obj = {}
                 locus_obj = genelocus_dict[main_id] if main_id in genelocus_dict else tmp_obj
                 tmp_row = data_frame["data"][main_id][0]
@@ -1166,9 +1215,8 @@ def main():
                 combo_list = ["uniprotkb_canonical_ac","gene_symbol"]
                 update_record_stat(record_stat,  file_name, prop_name, 1, combo_list)
 
-
-                url = map_dict["xrefkey2url"]["protein_xref_uniprotkb"][0] 
-                url = url % (uniprotkb_ac)
+                
+                url = libgly.get_xref_url(map_dict, "protein_xref_uniprotkb", uniprotkb_ac,is_cited)
                 o = {
                     "name":species_obj[species]["long_name"]
                     ,"taxid":species_obj[species]["tax_id"]
@@ -1176,9 +1224,12 @@ def main():
                         {"database":"UniProtKB", "id":uniprotkb_ac,"url":url}
                     ]   
                 }
-                common_name = species_obj[str(species_obj[species]["tax_id"])]["common_name"]
-                if common_name != "":
-                    o["common_name"] = common_name
+                for nm in ["common_name", "glygen_name"]:
+                    name_val = species_obj[str(species_obj[species]["tax_id"])][nm]
+                    if name_val != "":
+                        o[nm] = name_val
+                o["reference_species"] = "%s [%s]" % (o["name"], o["taxid"])
+
                 combo_id = "%s|%s" % (main_id, species_obj[species]["tax_id"])
                 prop_name = "species"
                 main_dict[prop_name][combo_id] = o
@@ -1195,7 +1246,9 @@ def main():
                     if isoform in isoformlocus_dict:
                         locus_obj = isoformlocus_dict[isoform]
                     xref_key = "protein_xref_uniprot_isoform"
-                    isoform_url = map_dict["xrefkey2url"][xref_key][0] % (uniprotkb_ac,isoform)
+                    isoform_url = ""
+                    if xref_key in map_dict["xrefkey2url"]:
+                        isoform_url = map_dict["xrefkey2url"][xref_key][0] % (uniprotkb_ac,isoform)
                     isoform_seq, isoform_header = "", ""
                     if isoform in seq_dict:
                         isoform_seq, isoform_header = seq_dict[isoform], header_dict[isoform]
@@ -1250,7 +1303,7 @@ def main():
                 for tmp_row in data_frame["data"][main_id][:1]:
                     refseq_ac = tmp_row[tmp_fl.index("p_refseq_ac_best_match")]
                     refseq_proteinname = tmp_row[tmp_fl.index("refseq_protein_name")]
-                    refseq_url = map_dict["xrefkey2url"]["protein_xref_refseq"][0] % (refseq_ac)
+                    refseq_url = libgly.get_xref_url(map_dict,"protein_xref_refseq", refseq_ac,is_cited)
                     refseq_summary = tmp_row[tmp_fl.index("refseq_protein_summary")]
                     prop_name = "refseq"
                     main_dict[prop_name][main_id] = {
@@ -1323,9 +1376,9 @@ def main():
                     if combo_id == "seen":
                         continue
                     main_id, xref_key, xref_id = combo_id.split("|")
-                    xref_url =  map_dict["xrefkey2url"][xref_key][0] % (xref_id)
+                    xref_url =  libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
                     load_obj[combo_id]["date"] = load_obj[combo_id]["date"].split(" ")[0]
-                    xref_badge = map_dict["xrefkey2badge"][xref_key][0]
+                    xref_badge = libgly.get_xref_badge(map_dict, xref_key)
                     load_obj[combo_id]["reference"] = [
                         {
                             "type":xref_badge,
@@ -1333,7 +1386,48 @@ def main():
                             "url":xref_url
                         }
                     ]
-      
+
+
+        #--> structures
+        for sheet_name in ["protein_pdb_map"]:
+            if file_name.find(sheet_name) != -1 and file_name.split("_")[0] != "protein":
+                species = file_name.split("_")[0]
+                prop_name = "structures"
+                load_obj = main_dict[prop_name]
+                data_frame = {}
+                libgly.load_sheet_as_dict(data_frame, in_file, ",", "uniprotkb_canonical_ac")
+                tmp_fl = data_frame["fields"]
+                for main_id in data_frame["data"]:
+                    for tmp_row in data_frame["data"][main_id]:
+                        sequence_region = tmp_row[tmp_fl.index("sequence_region")]
+                        pdb_id = tmp_row[tmp_fl.index("pdb_id")]
+                        pdb_chain = tmp_row[tmp_fl.index("pdb_chain")]
+                        start_pos = tmp_row[tmp_fl.index("start_pos")]
+                        end_pos = tmp_row[tmp_fl.index("end_pos")]
+                        overlap = tmp_row[tmp_fl.index("overlap_ratio")]
+                        method = tmp_row[tmp_fl.index("experimental_method")]
+                        resolution = tmp_row[tmp_fl.index("resolution")]
+                        selection_flag = tmp_row[tmp_fl.index("selection_flag")]
+                        start_pos = int(start_pos) if start_pos.isdigit() else -1
+                        end_pos = int(end_pos) if end_pos.isdigit() else -1
+                        resolution = float(resolution) if resolution.isdigit() else -1.0
+                        pdb_type = "alphafold" if method in ["AlphaFold"] else "experimental"
+                        if selection_flag == "True" and pdb_id in pdbid2url:
+                            combo_id_one = "%s|%s" % (main_id,sequence_region)
+                            load_obj[combo_id_one] = {
+                                "pdb_id":pdb_id,
+                                "pdb_chain":pdb_chain,
+                                "start_pos":start_pos,
+                                "end_pos":end_pos,
+                                "overlap":overlap,
+                                "method":method,
+                                "type":pdb_type,
+                                "resolution":resolution,
+                                "url":pdbid2url[pdb_id]                    
+                            }        
+
+
+ 
         #--> disease
         for sheet_name in ["protein_disease"]:
             if file_name.find(sheet_name) != -1 and file_name.split("_")[0] != "protein":
@@ -1347,8 +1441,8 @@ def main():
                     for tmp_row in data_frame["data"][main_id]:
                         xref_key = tmp_row[tmp_fl.index("xref_key")]
                         xref_id = tmp_row[tmp_fl.index("xref_id")]
-                        xref_url = map_dict["xrefkey2url"][xref_key][0] % (xref_id)
-                        xref_badge = map_dict["xrefkey2badge"][xref_key][0]
+                        xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+                        xref_badge = libgly.get_xref_badge(map_dict, xref_key)
                         do_id = tmp_row[tmp_fl.index("do_id")].strip()
                         mondo_id = tmp_row[tmp_fl.index("mondo_id")].strip()
                         mim_id = xref_id if xref_key == "protein_xref_omim" else ""
@@ -1390,15 +1484,9 @@ def main():
                     combo_flist_one, combo_flist_two)
                 combo_list = ["uniprotkb_canonical_ac"] + combo_flist_one
                 update_record_stat(record_stat,  file_name, prop_name, n, combo_list)
-                #for combo_id in load_obj:
-                #    if combo_id == "seen":
-                #        continue
-                #    xref_key,xref_id = combo_id.split("|")[-2], combo_id.split("|")[-1]
-                #    ann_url = map_dict["xrefkey2url"][xref_key][0] % (xref_id)
-                #    load_obj[combo_id]["url"] = ann_url
 
         #--> phosphorylation
-        for sheet_name in ["_phosphorylation_sites_"]:
+        for sheet_name in ["proteoform_phosphorylation_sites_"]:
             if file_name.find(sheet_name) != -1:
                 species = file_name.split("_")[0]
                 prop_name = "phosphorylation"
@@ -1423,80 +1511,88 @@ def main():
 
                 for combo_id in load_obj:
                     if "start_pos" in load_obj[combo_id]:
+                        aa_pos = int(load_obj[combo_id]["start_pos"])
+                        residue = load_obj[combo_id]["residue"]
                         load_obj[combo_id]["start_pos"]  = int(load_obj[combo_id]["start_pos"])
                         load_obj[combo_id]["end_pos"]  = int(load_obj[combo_id]["end_pos"])
-
+                        load_obj[combo_id]["site_lbl"] =  "%s%s" % (residue, aa_pos)
 
 
 
          
-        for sheet_name in ["_glycosylation_sites_"]:
+        for sheet_name in ["proteoform_glycosylation_sites_"]:
             if file_name.find(sheet_name) != -1:
+                prd_tool = ""
+                if file_name.find("glycosylation_sites_predicted_") != -1:
+                    prd_tool = file_name.split("_predicted_")[-1].replace(".csv", "")
+                
                 species = file_name.split("_")[0]
                 prop_name = "glycosylation"
                 load_obj = main_dict[prop_name]
-                data_frame = {}
-                libgly.load_sheet_as_dict(data_frame, in_file, ",", "uniprotkb_canonical_ac")
-                tmp_fl = data_frame["fields"]
-                for main_id in data_frame["data"]:
-                    for tmp_row in data_frame["data"][main_id]:
-                        #src_file_name = tmp_row[tmp_fl.index("src_file_name")]
+                FR = open(in_file, "r")
+                idx = 0
+                tmp_fl = []
+                for line in FR:
+                    idx += 1
+                    tmp_row = line.strip().split("\",\"")
+                    tmp_row[0], tmp_row[-1] = tmp_row[0].replace("\"", ""), tmp_row[-1].replace("\"", "")
+                    if idx == 1:
+                        tmp_fl = tmp_row
+                        continue
+                    else:
+                        main_id = tmp_row[tmp_fl.index("uniprotkb_canonical_ac")]
                         tmp_aa_pos = tmp_row[tmp_fl.index("glycosylation_site_uniprotkb")]
                         tmp_glytoucan_ac = tmp_row[tmp_fl.index("saccharide")]
                         tmp_amino_acid = tmp_row[tmp_fl.index("amino_acid")]
-                        site_seq = tmp_row[tmp_fl.index("site_seq")]
+                        site_seq = tmp_row[tmp_fl.index("site_seq")] if "site_seq" in tmp_fl else ""
                         start_pos = tmp_row[tmp_fl.index("start_pos")]
                         end_pos = tmp_row[tmp_fl.index("end_pos")]
                         start_aa = tmp_row[tmp_fl.index("start_aa")]
                         end_aa = tmp_row[tmp_fl.index("end_aa")]
+                        mining_tool = tmp_row[tmp_fl.index("mining_tools")] if "mining_tools" in tmp_fl else ""
                         aa_pos_list = tmp_aa_pos.split("|")
                         glytoucan_ac_list = tmp_glytoucan_ac.split("|")
                         amino_acid_list = tmp_amino_acid.split("|")
                         aa_pos = aa_pos_list[0]
                         glytoucan_ac = glytoucan_ac_list[0]
                         amino_acid = amino_acid_list[0]
-                        
-                        if glytoucan_ac != "" and glytoucan_ac not in glycan_list:
+                        if glytoucan_ac != "" and glytoucan_ac not in glycan_dict:
                             continue
 
                         gly_type = tmp_row[tmp_fl.index("glycosylation_type")]
-                        gly_type = gly_type[0].upper() + gly_type[1:]
+                        if gly_type != "":
+                            gly_type = gly_type[0].upper() + gly_type[1:]
                         gly_subtype = ""
                         if "glycosylation_subtype" in tmp_fl:
                             gly_subtype = tmp_row[tmp_fl.index("glycosylation_subtype")]
                         
                         xref_key = tmp_row[tmp_fl.index("xref_key")]
                         xref_id = tmp_row[tmp_fl.index("xref_id")]
-                        xref_url = map_dict["xrefkey2url"][xref_key][0] % (xref_id)
-                        xref_badge = map_dict["xrefkey2badge"][xref_key][0]
-                        parts = tmp_row[tmp_fl.index("src_xref_key")].split("_")
-                        src_suffix = "_".join(parts[2:])
-                        parts = tmp_row[tmp_fl.index("xref_key")].split("_")
-                        xref_suffix = "_".join(parts[2:])
-                        combo_id = "%s|%s|%s|%s" % (main_id,start_pos, end_pos,glytoucan_ac)
+                        xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+                        xref_badge = libgly.get_xref_badge(map_dict, xref_key)
                         
-
+                        src_xref_key = tmp_row[tmp_fl.index("src_xref_key")]
+                        src_xref_id = tmp_row[tmp_fl.index("src_xref_id")]
+                        src_xref_url = libgly.get_xref_url(map_dict, src_xref_key, src_xref_id,is_cited)
+                        src_xref_badge = libgly.get_xref_badge(map_dict, src_xref_key)
+                        
+                        combo_id = "%s|%s|%s|%s" % (main_id,start_pos, end_pos,glytoucan_ac)
                         site_cat_one, site_cat_two = "", ""
                         if combo_id in is_reported:
-                            #site_cat_one = "reported.%s" % (src_suffix)
                             site_cat_one = "reported"
                             site_cat_two = "reported"
-                            if src_suffix == "automatic_literature_mining":
+                            if mining_tool != "":
                                 site_cat_two = "automatic_literature_mining"
-                            
                             if glytoucan_ac != "":
                                 site_cat_one = "reported_with_glycan"
-                                #site_cat_one += ".%s" % (src_suffix)
                                 site_cat_two += "_with_glycan"
                         else:
-                            #site_cat_one = "predicted.%s" % (src_suffix)
                             site_cat_one = "predicted"
                             site_cat_two = "predicted"
                             if glytoucan_ac != "":
                                 site_cat_one = "predicted_with_glycan"
-                                #site_cat_one += ".%s" % (src_suffix)
                                 site_cat_two = "predicted_with_glycan"
-                    
+                         
 
                         cond_list = []
                         #cond_list.append(aa_pos.strip() == "")
@@ -1505,7 +1601,6 @@ def main():
                         if True in cond_list:
                             continue
                         combo_id_one = "%s|%s|%s|%s|%s" % (main_id,start_pos,end_pos,glytoucan_ac,site_cat_one)
-                       
                         note_fields = ["uniprotkb_glycosylation_annotation_comment",
                             "glycosylation_subtype","curation_notes","additonal_notes"
                         ]
@@ -1513,13 +1608,22 @@ def main():
                         for f in note_fields:
                             comment += " " + tmp_row[tmp_fl.index(f)] if f in tmp_fl else ""
                         comment =  comment.strip()
-                   
+
+                        prd_tool_list = []
+                        ooo = {"label":prd_tool}
+                        if prd_tool in tool_url_dict:
+                            ooo["url"] = tool_url_dict[prd_tool]                  
+                        prd_tool_list.append(ooo)
+
                         if combo_id_one not in seen_combo_glycosylation:
                             gly_obj = {
                                 "glytoucan_ac":glytoucan_ac,
                                 "type":gly_type,
                                 "subtype":gly_subtype,
+                                "prediction_tool":prd_tool,
+                                "prediction_tool_list":prd_tool_list,
                                 "site_category":site_cat_two,
+                                "site_category_dict":{},
                                 "site_seq":site_seq,
                                 "relation":"attached",
                                 "comment":comment
@@ -1533,7 +1637,8 @@ def main():
                                 gly_obj["residue"] = amino_acid[0].upper()
                                 if len(amino_acid) > 1:
                                     gly_obj["residue"] += amino_acid[1:].lower() 
-                                     
+                                gly_obj["site_lbl"] =  "%s%s" % (gly_obj["residue"], aa_pos)
+
                             if len(aa_pos_list) > 1:
                                 gly_obj["alternate_start_pos_list"] = []
                                 gly_obj["alternate_end_pos_list"] = []
@@ -1549,24 +1654,55 @@ def main():
                             load_obj[combo_id_one] = gly_obj
                             load_obj[combo_id_one]["evidence"] = []
                             seen_combo_glycosylation[combo_id_one] = []
+                        
+                        #overwrite conditions
+                        cat_list_one = ["reported", "automatic_literature_mining", "predicted_with_glycan", "predicted"]
+                        cat_list_two = ["automatic_literature_mining", "predicted_with_glycan", "predicted"]
+                        cat_list_three = ["predicted_with_glycan", "predicted"]
+                        cat_list_four = ["predicted"]
+                        if site_cat_two == "reported_with_glycan" and load_obj[combo_id_one]["site_category"] in cat_list_one:
+                            load_obj[combo_id_one]["site_category"] = site_cat_two
+                        elif site_cat_two == "reported" and load_obj[combo_id_one]["site_category"] in cat_list_two:
+                            load_obj[combo_id_one]["site_category"] = site_cat_two
+                        elif site_cat_two == "automatic_literature_mining" and load_obj[combo_id_one]["site_category"] in cat_list_three:
+                            load_obj[combo_id_one]["site_category"] = site_cat_two 
+                        elif site_cat_two == "predicted_with_glycan" and load_obj[combo_id_one]["site_category"] in cat_list_four:
+                            load_obj[combo_id_one]["site_category"] = site_cat_two
+                           
+                        load_obj[combo_id_one]["site_category_dict"][site_cat_two] = True
+                        if mining_tool != "":
+                            load_obj[combo_id_one]["mining_tool"] = mining_tool
+                            load_obj[combo_id_one]["mining_tool_list"] = []
+                            for tool in mining_tool.split(";"):
+                                ooo = {"label":tool}
+                                if tool in tool_url_dict:
+                                    ooo["url"] = tool_url_dict[tool] 
+                                load_obj[combo_id_one]["mining_tool_list"].append(ooo)
+
+
                         ev_obj = {"id":xref_id, "database":xref_badge, "url":xref_url}
                         combo_id_two = "%s|%s" % (xref_key,xref_id)
-                        
                         if combo_id_two not in seen_combo_glycosylation[combo_id_one]:
                             load_obj[combo_id_one]["evidence"].append(ev_obj)
                             seen_combo_glycosylation[combo_id_one].append(combo_id_two)
-
+                        #xxxxxxx
+                        ev_obj = {"id":src_xref_id, "database":src_xref_badge, "url":src_xref_url}
+                        combo_id_two = "%s|%s" % (src_xref_key,src_xref_id)
+                        if combo_id_two not in seen_combo_glycosylation[combo_id_one]:
+                            load_obj[combo_id_one]["evidence"].append(ev_obj)
+                            seen_combo_glycosylation[combo_id_one].append(combo_id_two)
+                        
                         if main_id not in main_dict["keywords"]:
                             main_dict["keywords"][main_id] = []
                         kw_list = ["glycoprotein", "glycoprotein_" + site_cat_one]
                         for kw in kw_list:
                             if kw not in main_dict["keywords"][main_id]:
                                 main_dict["keywords"][main_id].append(kw)
-
+                FR.close()
 
         
         #--> glycation
-        for sheet_name in ["_glycation_sites_"]:
+        for sheet_name in ["proteoform_glycation_sites_"]:
             if file_name.find(sheet_name) != -1:
                 species = file_name.split("_")[0]
                 prop_name = "glycation"
@@ -1653,8 +1789,8 @@ def main():
                     if combo_id == "seen":
                         continue
                     xref_key, xref_id = combo_id.split("|")[-2], combo_id.split("|")[-1]
-                    xref_url = map_dict["xrefkey2url"][xref_key][0] % (xref_id)
-                    xref_badge = map_dict["xrefkey2badge"][xref_key][0]
+                    xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+                    xref_badge = libgly.get_xref_badge(map_dict, xref_key)
                     load_obj[combo_id]["url"] = xref_url
                     load_obj[combo_id]["resource"] = xref_badge
                     if xref_id in pathway_dict:
@@ -1664,6 +1800,8 @@ def main():
                             if rxn_id in reaction_dict:
                                 if "enzyme_list" in reaction_dict[rxn_id]:
                                     if main_id in reaction_dict[rxn_id]["enzyme_list"]:
+                                        if "reaction_list" not in load_obj[combo_id]:
+                                            load_obj[combo_id]["reaction_list"] = []
                                         load_obj[combo_id]["reaction_list"].append(rxn_id)
 
 
@@ -1684,8 +1822,8 @@ def main():
                         pro_name = tmp_row[tmp_fl.index("pro_protein_name")]
                         pro_def = tmp_row[tmp_fl.index("pro_protein_definition")]
                         combo_id = "%s|%s" % (main_id, xref_id)
-                        xref_url = map_dict["xrefkey2url"][xref_key][0] % (xref_id)
-                        xref_badge = map_dict["xrefkey2badge"][xref_key][0]
+                        xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+                        xref_badge = libgly.get_xref_badge(map_dict, xref_key)
                         ev_obj = {"id":xref_id,"database":xref_badge, "url":xref_url}
                         o = {"name":pro_name, "definition":pro_def, "evidence":[ev_obj]}
                         load_obj[combo_id] = o
@@ -1707,10 +1845,10 @@ def main():
                         go_term_label = tmp_row[tmp_fl.index("go_term_label")]
                         go_term_category = tmp_row[tmp_fl.index("go_term_category")]
                         pmid = tmp_row[tmp_fl.index("pmid")]
-                        url = map_dict["xrefkey2url"]["protein_xref_uniprotkb"][0] % (uniprotkb_ac)
+                        url = libgly.get_xref_url(map_dict, "protein_xref_uniprotkb", uniprotkb_ac,is_cited)
                         ev_obj = {"database": "UniProtKB", "id":uniprotkb_ac, "url":url}
                         go_term_id = go_term_id.replace("_", ":")
-                        url = map_dict["xrefkey2url"]["protein_xref_go"][0] % (go_term_id)
+                        url = libgly.get_xref_url(map_dict,"protein_xref_go", go_term_id,is_cited)
                         o = {"name": go_term_label, "id":go_term_id, "url":url, "evidence":[ev_obj],
                                 "pmid":pmid}
                         if go_term_category not in go_ann_dict:
@@ -1842,7 +1980,7 @@ def main():
                     "sequence_mut":"alt_aa",
                     "comment":"filter_flags",
                     "chr_id":"chr_id",
-                    "chr_pos":"chr_pos",
+                    "chr_pos":"chr_start_pos",
                     "ref_nt":"ref_nt",
                     "alt_nt":"alt_nt",
                     "minor_allelic_frequency":"minor_allelic_frequency"
@@ -1869,6 +2007,10 @@ def main():
                         val_dict = {}
                         for p in prop_dict:
                             val_dict[p] = tmp_row[tmp_fl.index(prop_dict[p])]
+                        #ignore rows with empty chr_id
+                        if "chr_id" in prop_dict:
+                            if val_dict["chr_id"].strip() == "":
+                                continue
                         combo_list_one = [main_id]
                         combo_list_two = [main_id]
                         for p in ["start_pos", "sequence_org", "sequence_mut"]:
@@ -1891,16 +2033,16 @@ def main():
                             xref_id = combo_list_two[-1]
                             if xref_key not in map_dict["xrefkey2url"]:
                                 continue
-                            xref_url = map_dict["xrefkey2url"][xref_key][0] % (xref_id)
-                            xref_badge = map_dict["xrefkey2badge"][xref_key][0]
+                            xref_url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+                            xref_badge = libgly.get_xref_badge(map_dict, xref_key)
                             o = {"id":xref_id,"database":xref_badge, "url":xref_url}
                             load_obj[combo_id_one]["evidence"].append(o)
-
                         combo_id = combo_id_one
                         ann_score = len(load_obj[combo_id]["comment"].split(";"))
                         load_obj[combo_id]["ann_score"] = ann_score
                         load_obj[combo_id]["start_pos"] = int(load_obj[combo_id]["start_pos"])
                         load_obj[combo_id]["end_pos"] = int(load_obj[combo_id]["end_pos"])
+                        load_obj[combo_id]["site_lbl"] = "%s%s" % (load_obj[combo_id]["sequence_org"], load_obj[combo_id]["start_pos"])
 
                         do_id = tmp_row[tmp_fl.index("do_id")]
                         mim_id = tmp_row[tmp_fl.index("mim_id")]
@@ -1926,12 +2068,12 @@ def main():
                                     d_url_list.append(d_url)
                                 if do_id != "":
                                     xref_key,xref_id = "protein_xref_do", do_id
-                                    url = map_dict["xrefkey2url"][xref_key][0]%(xref_id)
+                                    url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
                                     if url not in d_url_list:
                                         load_obj[combo_id]["disease"].append(disease_obj)
                                 elif mim_id != "":
                                     xref_key,xref_id = "protein_xref_omim", mim_id
-                                    url = map_dict["xrefkey2url"][xref_key][0]%(xref_id)
+                                    url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
                                     if url not in d_url_list:
                                         load_obj[combo_id]["disease"].append(disease_obj)
 
@@ -1975,22 +2117,50 @@ def main():
                 combo_list = ["uniprotkb_canonical_ac"] + combo_flist_one
                 update_record_stat(record_stat,  file_name, prop_name, n, combo_list)
 
-                for combo_id in load_obj:
+                combo_id_list = list(load_obj.keys())
+                for combo_id in combo_id_list:
                     if combo_id == "seen":
                         continue
                     main_id = combo_id.split("|")[0]
                     uniprotkb_ac = main_id.split("-")[0]
                     xref_key, xref_id = combo_id.split("|")[-2], combo_id.split("|")[-1]
-                    xref_badge = map_dict["xrefkey2badge"][xref_key][0]
-                    xref_url = map_dict["xrefkey2url"][xref_key][0]
-                    if xref_url.find("%s") != -1:
-                        if xref_key in ["protein_xref_brenda"]:
-                            xref_url = xref_url % (xref_id, uniprotkb_ac)
-                        else:
-                            xref_url = xref_url % (xref_id)
+                    xref_badge = libgly.get_xref_badge(map_dict, xref_key)
+                    if xref_badge.strip() == "":
+                        load_obj.pop(combo_id)
+                        continue 
+                    xref_url = ""
+                    if xref_key in ["protein_xref_brenda"]:
+                        xref_url = map_dict["xrefkey2url"][xref_key][0]
+                        xref_url = xref_url % (xref_id, uniprotkb_ac)
+                    else:
+                        xref_url =  libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
+                    
                     load_obj[combo_id]["url"] = xref_url
                     load_obj[combo_id]["database"] = xref_badge
-                
+                    cats_dict = map_dict["xrefkey2category"]
+                    xref_categories = cats_dict[xref_key] if xref_key in cats_dict else []
+                    load_obj[combo_id]["categories"] = xref_categories
+
+ 
+
+        #--> biomarkers
+        for sheet_name in ["protein_biomarkers"]:
+            if file_name.find(sheet_name) != -1:
+                prop_name = "biomarkers"
+                load_obj = main_dict[prop_name]
+                data_frame = {}
+                libgly.load_sheet_as_dict(data_frame, in_file, ",", "uniprotkb_canonical_ac")
+                tmp_fl = data_frame["fields"]
+                for main_id in data_frame["data"]: 
+                    #print (main_id, main_id in biomarker_dict)
+                    if main_id in biomarker_dict:
+                        for doc in biomarker_dict[main_id]:
+                            combo_id = "%s|%s" % (main_id, doc["biomarker_id"])
+                            if "aclist" in doc:
+                                doc.pop("aclist")
+                            load_obj[combo_id] = doc
+
+
 
         #-->expression_tissue
         for sheet_name in ["protein_expression_normal"]:
@@ -2014,20 +2184,27 @@ def main():
                 for combo_id in load_obj:
                     if combo_id == "seen":
                         continue
-                    uberon_id = combo_id.split("|")[-2].split(":")[1]
-                    uberon_name = load_obj[combo_id]["tissue"]
-                    if uberon_id in map_dict["uberonid2name"]:
-                        uberon_name = map_dict["uberonid2name"][uberon_id][0]
-                    uberon_name = uberon_name[0].upper() + uberon_name[1:]
-                    url = map_dict["xrefkey2url"]["protein_xref_uberon"][0] % (uberon_id)
-                    o = {"name":uberon_name,"uberon":uberon_id, "url":url}
+                    tissue_id = combo_id.split("|")[-2].split(":")[1]
+                    tissue_name = load_obj[combo_id]["tissue"]
+                    if tissue_id in map_dict["uberonid2name"]:
+                        tissue_name = map_dict["uberonid2name"][tissue_id][0]
+                    tissue_name = tissue_name[0].upper() + tissue_name[1:]
+                    name_space = "UBERON"
+                    t_xref_key = "tissue_xref_" + name_space.lower()
+                    t_xref_url = libgly.get_xref_url(map_dict, t_xref_key, tissue_id,is_cited)
+                    o = {
+                        "name":tissue_name,
+                        "namespace":name_space,
+                        "id":tissue_id, 
+                        "url":t_xref_url
+                    }
                     load_obj[combo_id]["tissue"] = o
                     #call = "yes" if load_obj[combo_id]["present"] == "present" else "no"
                     call = load_obj[combo_id]["present"] 
                     load_obj[combo_id]["present"] = call
                 
-                    if uberon_id in map_dict["uberonid2doid"]:
-                        for do_id in map_dict["uberonid2doid"][uberon_id]:
+                    if tissue_id in map_dict["uberonid2doid"]:
+                        for do_id in map_dict["uberonid2doid"][tissue_id]:
                             load_obj["seen"][do_id] = True
 
 
@@ -2057,7 +2234,7 @@ def main():
                         continue
                     do_id = load_obj[combo_id]["do_id"]
                     parent_doid = load_obj[combo_id]["parent_doid"]
-                    url = map_dict["xrefkey2url"]["protein_xref_do"][0] % (do_id)
+                    url = libgly.get_xref_url(map_dict, "protein_xref_do", do_id,is_cited)
                     mondo_id, mim_id = "", ""
                     disease_obj = get_disease_info(do_id, mondo_id, mim_id)
                     if disease_obj != {}:
@@ -2070,7 +2247,7 @@ def main():
                                 d_url_list.append(d_url)
                             if do_id != "":
                                 xref_key,xref_id = "protein_xref_do", do_id
-                                url = map_dict["xrefkey2url"][xref_key][0]%(xref_id)
+                                url = libgly.get_xref_url(map_dict, xref_key, xref_id,is_cited)
                                 if url not in d_url_list:
                                     load_obj[combo_id]["disease"].append(disease_obj)
 
@@ -2102,7 +2279,7 @@ def main():
 
 
 
-    sec_list = main_dict.keys() if DEBUG == False else sec_name_list
+    sec_list = main_dict.keys()
     for sec in sec_list:
         main_dict[sec].pop("seen")
         for combo_id in sorted(main_dict[sec]):
@@ -2128,7 +2305,8 @@ def main():
                 obj["refseq"] = refseq_dict[main_id]
 
 
-        out_file = path_obj["jsondbpath"] + "/proteindb/%s.json" % (main_id)
+
+
         obj["snv"].sort(key=get_sort_key_value_mut, reverse=True)
         for o in obj["snv"]:
             o.pop("ann_score")
@@ -2138,7 +2316,9 @@ def main():
         obj["synthesized_glycans"] = []
         if main_id in synthesized_glycans:
             obj["synthesized_glycans"] = synthesized_glycans[main_id]
-       
+      
+        obj["enzyme_annotation"] = enzyme_ann[main_id] if main_id in enzyme_ann else []
+ 
         obj["cluster_types"] = []
         seen_cluster_types = {}
         if "isoforms" in obj:
@@ -2158,23 +2338,158 @@ def main():
                         obj["cluster_types"].append(tmp_o)
                         seen_cluster_types[tmp_o["name"]] = True
 
+        obj["sequence_features"] = get_seq_features(obj)
+    
+        section_stats.get_protein_sec_stats(obj, "protein")
+
+        out_file = "jsondb/proteindb/%s.json" % (main_id)
+        out_str = json.dumps(obj, indent=4)
+        if len(out_str) > 16000000:
+            out_file = "jsondb/jumbodb/proteindb/%s.json" % (main_id)
 
         with open(out_file, "w") as FW:
             FW.write("%s\n" % (json.dumps(obj, indent=4)))
         record_count += 1 
-    print ("make-proteindb: final filtered in: %s protein objects" % (record_count))
-
-
-    out_file = path_obj["jsondbpath"] + "/logs/proteindb.json" 
-    with open(out_file, "w") as FW:
-        FW.write("%s\n" % (json.dumps(record_stat, indent=4)))
+    msg = "make-proteindb: final %s protein objects for %s" % (record_count, species_name)
+    csvutil.write_log_msg(log_file, msg, "a")
 
 
 
+
+
+    return
+
+
+def load_pdbid2url(pdbid2url):
+
+    file_list = glob.glob("downloads/pdb/current/*.pdb")
+    for in_file in file_list:
+        pdb_id = in_file.split("/")[-1][:-4]
+        pdbid2url[pdb_id] = "https://data.glygen.org/ln2downloads/pdb/current/%s.pdb" % (pdb_id)
+    return
+
+
+
+#######################################
+def main():
+
+
+    usage = "\n%prog  [options]"
+    parser = OptionParser(usage,version="%prog version___")
+    parser.add_option("-s","--sec",action="store",dest="sec",help="Object section (OPTIONAL)")
+    (options,args) = parser.parse_args()
+
+                        
+    global config_obj   
+    global species_obj  
+    global species_list
+    global map_dict
+    global doid2xrefid
+    global xrefid2doid
+    global data_dir
+    global main_dict
+    global record_stat
+    global disease_id2names
+    global disease_id2desc
+    global recname_dict
+    global submittedname_dict
+    global disease_id2names
+    global disease_id2desc
+    global DEBUG
+    global is_cited
+    global pdbid2url
+    global glycan_dict
+    global glycan_class
+    global synthesized_glycans
+    global seq_dict
+    global header_dict    
+    global custom_xref_key_dict
+    global tool_url_dict
+
+    config_file = "../conf/config.json"
+    config_obj = json.loads(open(config_file, "r").read())
+    wrk_dir = "/data/shared/repos/glygen-backend-integration/object-maker/"
+    data_dir = wrk_dir
+
+    custom_xref_key_dict = {
+        "arabidopsis":"protein_xref_ensembl_arabidopsis",
+        "fruitfly":"protein_xref_ensembl_fruitfly",
+        "sarscov2":"protein_xref_ensembl_sarscov2",
+        "yeast":"protein_xref_ensembl_yeast"
+    }   
+    tool_url_dict = {
+        "isoglyp":"https://github.com/jonmohl/ISOGlyP",
+        "GlycoSiteMiner":"https://github.com/glygener/glycositeminer"
+    }
+ 
+    DEBUG = False
+    #DEBUG = True
+
+
+
+    log_file = "logs/make-proteindb.log"
+    msg = "make-proteindb: started logging"
+    csvutil.write_log_msg(log_file, msg, "w")
+
+
+    msg = "make-proteindb: loading pdbid2url"
+    csvutil.write_log_msg(log_file, msg, "a")
+    pdbid2url = {}
+    load_pdbid2url(pdbid2url)
+
+    species_obj, species_list = {}, []
+    load_species_info(species_obj, species_list)
+   
+    #species = "bovine"
+    #for nm in ["common_name", "glygen_name"]:
+    #    name_val = species_obj[str(species_obj[species]["tax_id"])][nm]
+    #    print (nm, name_val)
+    #exit()             
+    
+
+    msg = "make-proteindb: loading seqinfo"
+    csvutil.write_log_msg(log_file, msg, "a")
+    seq_dict, header_dict = {}, {}
+    load_sequence_info(seq_dict, header_dict)
+
+    glycan_dict = {}
+    msg = "make-proteindb: loading glycan list"
+    csvutil.write_log_msg(log_file, msg, "a")
+    load_glycan_masterlist(glycan_dict)
+
+    glycan_class = {}
+    msg = "make-proteindb: loading glycan_class"
+    csvutil.write_log_msg(log_file, msg, "a")
+    load_glycan_class(glycan_class)
+
+    synthesized_glycans = {}
+    msg = "make-proteindb: loading synthesized_glycans"
+    csvutil.write_log_msg(log_file, msg, "a")
+    load_synthesized_glycans(synthesized_glycans, glycan_class)
+
+    is_cited = libgly.get_is_cited() if DEBUG == False else {}
+    if DEBUG:
+        species_list = ["human"]
+
+    #species_list = ["yeast"] 
+
+    for species in species_list:
+        map_dict = {}
+        main_dict = {}
+        record_stat = {}
+        disease_id2names, disease_id2desc = {}, {}
+    
+        msg = "make-proteindb: now processing species=%s" % (species)
+        csvutil.write_log_msg(log_file, msg, "a")
+
+        make_objects(species)
+
+
+    return
 
 
 if __name__ == '__main__':
-        main()
+    main()
 
 
 

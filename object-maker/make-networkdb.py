@@ -11,6 +11,7 @@ from Bio.Seq import Seq
 
 
 import libgly
+import csvutil
 
 
 def add_decendant(tree_dict, src_type, src_id, dst_type, dst_id):
@@ -66,7 +67,6 @@ def main():
     global species_obj
     global map_dict
     global data_dir
-    global misc_dir
     global main_dict
 
 
@@ -75,24 +75,45 @@ def main():
     path_obj  =  config_obj[config_obj["server"]]["pathinfo"]
 
     data_dir = "reviewed/"
-    misc_dir = "generated/misc/"
+
+
+    species_obj = {}
+    in_file = "generated/misc/species_info.csv"
+    libgly.load_species_info(species_obj, in_file)
+    species_map = json.loads(open("generated/misc/species_map.json", "r").read())
+    tax_id_map = {}
+    for tax_id in species_map:
+        tax_id_map[tax_id] = species_map[tax_id]["ref_tax_id"]
+
 
 
     sec_list = config_obj["sitesections"]
 
-    
-    #glycan_file_list = glob.glob("jsondb/glycandb/G1768*.json")
-    #protein_file_list = glob.glob("jsondb/proteindb/P1421*.json")
-    glycan_file_list = glob.glob("jsondb/glycandb/*.json")
-    protein_file_list = glob.glob("jsondb/proteindb/*.json")
+    DEBUG = False
+    #DEBUG = True
+   
+    jsondb_dir = "jsondb/"
+
+    glycan_file_list = glob.glob(jsondb_dir + "glycandb/*.json")
+    protein_file_list = glob.glob(jsondb_dir + "proteindb/*.json")
+    if DEBUG:
+        glycan_file_list = glob.glob(jsondb_dir + "glycandb/XXX*.json")
+        protein_file_list = glob.glob(jsondb_dir +"proteindb/P19652*.json")
             
 
+    log_file = "logs/make-networkdb.log"
+    msg = "make-networkdb: started logging"
+    csvutil.write_log_msg(log_file, msg, "w")
 
     seen_edge = {}
     tree_dict = {}
 
     record_count = 0
     for json_file in glycan_file_list:
+        if record_count > 0 and record_count%1000 == 0:
+            msg = "make-networkdb: processed %s glycan records" % (record_count)
+            csvutil.write_log_msg(log_file, msg, "a")
+
         doc = json.loads(open(json_file,"r").read())
         src_type, src_id = "glycan", doc["glytoucan_ac"]
         linked_flag = False
@@ -100,8 +121,12 @@ def main():
         if doc[sec] != []:
             linked_flag = True
             for obj in doc[sec]:
-                dst_type, dst_id = "species", obj["taxid"]
-                add_decendant(tree_dict, src_type, src_id, dst_type, dst_id)
+                tax_id = str(obj["taxid"])
+                tax_id = tax_id_map[tax_id] if tax_id in tax_id_map else tax_id
+                dst_type, dst_id = "species", int(tax_id)
+                if tax_id in species_obj:
+                    if species_obj[tax_id]["is_reference"] == "yes":
+                        add_decendant(tree_dict, src_type, src_id, dst_type, dst_id)
         sec = "motifs"
         if doc[sec] != []:
             linked_flag = True
@@ -129,29 +154,32 @@ def main():
 
     record_count = 0
     for json_file in protein_file_list:
+        if record_count > 0 and record_count%1000 == 0:
+            msg = "make-networkdb: processed %s protein records" % (record_count)
+            csvutil.write_log_msg(log_file, msg, "a")
+
+
         doc = json.loads(open(json_file,"r").read())
         canon = doc["uniprot_canonical_ac"]
         tax_id = doc["species"][0]["taxid"]
         #gene_name = doc["gene"][0]["name"]
         gene_name = "gene." + canon
-
-        
+        seq_len = doc["sequence"]["length"]
         site_dict = {}
         for sec in sec_list:
             if sec in doc:
                 for obj in doc[sec]:
-                    start_pos, end_pos = -1, -1
+                    start_pos, end_pos = 0, 0
                     if "start_pos" in obj:
                         start_pos, end_pos = obj["start_pos"], obj["end_pos"]
                     elif "position" in obj:
                         start_pos, end_pos = obj["position"], obj["position"]
-                    if start_pos == -1 or end_pos == -1:
-                        continue
+                    #if start_pos == 1 or end_pos == seq_len:
+                    #    continue
                     site_id = "%s.%s.%s" % (canon,start_pos, end_pos)
                     src_type, src_id = "protein",canon
                     dst_type, dst_id = "site", site_id
                     add_decendant(tree_dict, src_type, src_id, dst_type, dst_id)
-                    
                     #src_type, src_id = "site",site_id
                     #dst_type, dst_id = "species", tax_id
                     #add_decendant(tree_dict, src_type, src_id, dst_type, dst_id)
@@ -161,6 +189,8 @@ def main():
                             src_type, src_id = "site", site_id
                             dst_type, dst_id = "glycan", obj["glytoucan_ac"]
                             add_decendant(tree_dict, src_type,src_id, dst_type, dst_id)
+                            if DEBUG:
+                                print ("%s|%s --> %s|%s" % (src_type,src_id, dst_type, dst_id))
 
         sec = "interactions"
         if doc[sec] != []:
@@ -169,12 +199,12 @@ def main():
                     src_type, src_id = "protein",canon
                     dst_type, dst_id = "glycan", obj["interactor_id"]
                     add_decendant(tree_dict, src_type,src_id, dst_type, dst_id)
-        
 
         sec = "synthesized_glycans"
         if doc[sec] != []:
             for obj in doc[sec]:
-                src_type, src_id = "protein", canon
+                #src_type, src_id = "protein", canon
+                src_type, src_id = "enzyme", "enzyme." + canon
                 dst_type, dst_id = "glycan", obj["glytoucan_ac"]
                 add_decendant(tree_dict, src_type,src_id, dst_type, dst_id)
 
@@ -247,6 +277,9 @@ def main():
 
         record_count += 1
 
+    #BATCH_SIZE = 10
+    BATCH_SIZE = 50
+    #BATCH_SIZE = 100
 
 
     
@@ -254,7 +287,7 @@ def main():
     record_count = 0
     obj_list = []
     for src_type in tree_dict:
-        batch_size = 1 if src_type == "species" else 50
+        batch_size = 1 if src_type in ["species", "disease"] else BATCH_SIZE
         for src_id in tree_dict[src_type]:
             if record_count > 0 and record_count%batch_size == 0:
                 batch_count += 1
@@ -276,7 +309,9 @@ def main():
     with open(out_file, "w") as FW:
         FW.write("%s\n" % (json.dumps(doc, indent=4)))
 
-    print ("make-networkdb: ... final created: %s network objects" % (record_count))
+    msg = "make-networkdb: ... final created: %s network objects" % (record_count)
+    csvutil.write_log_msg(log_file, msg, "a")
+
 
 
 if __name__ == '__main__':
